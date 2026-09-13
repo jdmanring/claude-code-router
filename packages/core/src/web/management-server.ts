@@ -317,6 +317,7 @@ const rpcHandlers: Record<string, RpcHandler> = {
   getAppInfo: () => getCliAppInfo(),
   getConfig: () => loadAppConfig(),
   getGatewayStatus: () => gatewayService.getStatus(),
+  getRouteDiagnostics: () => gatewayService.getCompiledRouteDiagnostics(),
   getServiceIdentity: (serviceToken) => ({
     pid: process.pid,
     serviceTokenConfigured: Boolean(process.env.CCR_SERVICE_INSTANCE_TOKEN?.trim()),
