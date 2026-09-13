@@ -169,8 +169,17 @@ function compileRouterRule(
     }
   }
   diagnostics.push(...fallbackModelDiagnostics(rule.fallback, modelRegistry, diagnostic.source, rule));
+  const active = (rule.type === "script" ? Boolean(rule.script) : rewrites.length > 0) && diagnostics.length === 0;
+  if (!active && diagnostics.length > 0) {
+    // An inactive rule stops matching entirely, so say so where an operator
+    // reading the gateway log will see it.
+    console.warn(
+      `[routing] rule "${rule.name}" (${rule.id}) is inactive and will not match: ` +
+      diagnostics.map((entry) => entry.message).join("; ")
+    );
+  }
   return {
-    active: (rule.type === "script" ? Boolean(rule.script) : rewrites.length > 0) && diagnostics.length === 0,
+    active,
     diagnostics,
     model,
     rewrites,
