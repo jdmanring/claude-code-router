@@ -489,62 +489,43 @@ function useTemporaryCodexHome(t, prefix) {
 }
 
 function useTemporaryHome(t, prefix) {
-  const previousHome = process.env.CCR_INTERNAL_HOME_DIR;
-  const previousOsHome = process.env.HOME;
-  const previousZcodeHome = process.env.ZCODE_HOME;
-  const previousZcodeStorageDir = process.env.ZCODE_STORAGE_DIR;
-  const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
-  const previousSecureStorageDir = process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
-  const previousCustomOauthUrl = process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL;
+  // HOME is captured and restored but deliberately not modified: the providers
+  // under test resolve CCR_INTERNAL_HOME_DIR first, and rewriting HOME would
+  // send a fallback path to the real home. Only the variables that override a
+  // home-derived location are cleared.
+  const previous = new Map([
+    ["CCR_INTERNAL_HOME_DIR", process.env.CCR_INTERNAL_HOME_DIR],
+    ["HOME", process.env.HOME],
+    ...CREDENTIAL_DIR_OVERRIDES.map((name) => [name, process.env[name]])
+  ]);
   const home = mkdtempSync(path.join(os.tmpdir(), prefix));
   process.env.CCR_INTERNAL_HOME_DIR = home;
-  delete process.env.ZCODE_HOME;
-  delete process.env.ZCODE_STORAGE_DIR;
-  // The Claude credential scan resolves this dir ahead of HOME, so an
-  // inherited value from a router-launched session would point the fixture
-  // at the real profile store.
-  delete process.env.CLAUDE_CONFIG_DIR;
-  delete process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
-  delete process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL;
+  for (const name of CREDENTIAL_DIR_OVERRIDES) {
+    delete process.env[name];
+  }
   t.after(() => {
-    if (previousHome === undefined) {
-      delete process.env.CCR_INTERNAL_HOME_DIR;
-    } else {
-      process.env.CCR_INTERNAL_HOME_DIR = previousHome;
-    }
-    if (previousOsHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = previousOsHome;
-    }
-    if (previousZcodeHome === undefined) {
-      delete process.env.ZCODE_HOME;
-    } else {
-      process.env.ZCODE_HOME = previousZcodeHome;
-    }
-    if (previousZcodeStorageDir === undefined) {
-      delete process.env.ZCODE_STORAGE_DIR;
-    } else {
-      process.env.ZCODE_STORAGE_DIR = previousZcodeStorageDir;
-    }
-    if (previousConfigDir === undefined) {
-      delete process.env.CLAUDE_CONFIG_DIR;
-    } else {
-      process.env.CLAUDE_CONFIG_DIR = previousConfigDir;
-    }
-    if (previousSecureStorageDir === undefined) {
-      delete process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
-    } else {
-      process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR = previousSecureStorageDir;
-    }
-    if (previousCustomOauthUrl === undefined) {
-      delete process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL;
-    } else {
-      process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL = previousCustomOauthUrl;
+    for (const [name, value] of previous) {
+      restoreEnv(name, value);
     }
     rmSync(home, { force: true, recursive: true });
   });
   return home;
+}
+
+const CREDENTIAL_DIR_OVERRIDES = [
+  "ZCODE_HOME",
+  "ZCODE_STORAGE_DIR",
+  "CLAUDE_CONFIG_DIR",
+  "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+  "CLAUDE_CODE_CUSTOM_OAUTH_URL"
+];
+
+function restoreEnv(key, value) {
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
 }
 
 function usePlatform(t, platform) {
