@@ -4,17 +4,21 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { claudeDesignRuntimePluginConfig, claudeShipRuntimePluginConfig, migrateKnownGatewayPluginConfigsForTest, withClaudeDesignRuntimePluginConfig } from "@ccr/core/config/config.ts";
-import { CCR_DESKTOP_APP_ENV } from "@ccr/core/runtime/desktop-app.ts";
+import { CCR_DESKTOP_APP_ENV, CCR_DESKTOP_APP_FORCE_ENV } from "@ccr/core/runtime/desktop-app.ts";
 
 test("legacy combined Claude Design plugin config migrates to split Design and Ship plugins", () => {
   const extensionsRoot = mkdtempSync(path.join(os.tmpdir(), "ccr-extensions-migration-"));
   const previousExtensionsDir = process.env.CCR_EXTENSIONS_DIR;
   const previousDesktopApp = process.env[CCR_DESKTOP_APP_ENV];
+  const previousForce = process.env[CCR_DESKTOP_APP_FORCE_ENV];
   try {
     writePluginModule(extensionsRoot, "claude-design");
     writePluginModule(extensionsRoot, "claude-ship");
     process.env.CCR_EXTENSIONS_DIR = extensionsRoot;
     process.env[CCR_DESKTOP_APP_ENV] = "1";
+    // The bundled-claude-runtime resolution is gated on running under Electron;
+    // this Node test stands in for that so the bundled path is exercised.
+    process.env[CCR_DESKTOP_APP_FORCE_ENV] = "1";
 
     const result = migrateKnownGatewayPluginConfigsForTest([{
       apps: [
@@ -63,6 +67,7 @@ test("legacy combined Claude Design plugin config migrates to split Design and S
   } finally {
     restoreEnv("CCR_EXTENSIONS_DIR", previousExtensionsDir);
     restoreEnv(CCR_DESKTOP_APP_ENV, previousDesktopApp);
+    restoreEnv(CCR_DESKTOP_APP_FORCE_ENV, previousForce);
     rmSync(extensionsRoot, { force: true, recursive: true });
   }
 });
@@ -99,8 +104,12 @@ test("legacy Claude Design migration does not duplicate an existing Claude Ship 
 
 test("Claude Design runtime plugin config resolves from the bundled plugin in CCR Desktop without persisting", () => {
   const previousDesktopApp = process.env[CCR_DESKTOP_APP_ENV];
+  const previousForce = process.env[CCR_DESKTOP_APP_FORCE_ENV];
   try {
     process.env[CCR_DESKTOP_APP_ENV] = "1";
+    // The bundled-claude-runtime resolution is gated on running under Electron;
+    // this Node test stands in for that so the bundled path is exercised.
+    process.env[CCR_DESKTOP_APP_FORCE_ENV] = "1";
 
     const plugin = claudeDesignRuntimePluginConfig();
     const shipPlugin = claudeShipRuntimePluginConfig();
@@ -127,6 +136,7 @@ test("Claude Design runtime plugin config resolves from the bundled plugin in CC
     assert.equal(withClaudeDesignRuntimePluginConfig(configured), configured);
   } finally {
     restoreEnv(CCR_DESKTOP_APP_ENV, previousDesktopApp);
+    restoreEnv(CCR_DESKTOP_APP_FORCE_ENV, previousForce);
   }
 });
 
