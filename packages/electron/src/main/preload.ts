@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { browserErrorI18nLanguage, formatLocalizedErrorMessage } from "@ccr/core/contracts/i18n";
 import { IPC_CHANNELS } from "@ccr/core/contracts/ipc-channels";
+import type { RouteDiagnostic } from "@ccr/core/routing/contracts";
 import type {
   AgentAnalysisFilter,
   AgentAnalysisSnapshot,
@@ -121,6 +122,7 @@ contextBridge.exposeInMainWorld("ccr", {
   getConfig: () => invoke(IPC_CHANNELS.appGetConfig) as Promise<AppConfig>,
   getFilePath: (file: File) => webUtils.getPathForFile(file),
   getGatewayStatus: () => invoke(IPC_CHANNELS.appGetGatewayStatus) as Promise<GatewayStatus>,
+  getRouteDiagnostics: () => invoke(IPC_CHANNELS.appGetRouteDiagnostics) as Promise<RouteDiagnostic[]>,
   getLocalAgentProviderCandidates: () => invoke(IPC_CHANNELS.appGetLocalAgentProviderCandidates) as Promise<LocalAgentProviderCandidate[]>,
   getOnboardingFinished: () => invoke(IPC_CHANNELS.appGetOnboardingFinished) as Promise<boolean>,
   getPendingProviderDeepLinks: () => invoke(IPC_CHANNELS.appGetPendingProviderDeepLinks) as Promise<ProviderDeepLinkRequest[]>,

@@ -8,6 +8,7 @@ export const IPC_CHANNELS = {
   appGetAgentAnalysis: "ccr:app:get-agent-analysis",
   appGetAgentTracePayload: "ccr:app:get-agent-trace-payload",
   appGetGatewayStatus: "ccr:app:get-gateway-status",
+  appGetRouteDiagnostics: "ccr:app:get-route-diagnostics",
   appGetInfo: "ccr:app:get-info",
   appGetOnboardingFinished: "ccr:app:get-onboarding-finished",
   appGetPendingProviderDeepLinks: "ccr:app:get-pending-provider-deep-links",

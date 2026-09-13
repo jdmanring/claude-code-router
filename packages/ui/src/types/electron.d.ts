@@ -87,6 +87,7 @@ import type {
   UsageStatsSnapshot
 } from "@ccr/core/contracts/app";
 import type { ProviderPreset } from "@ccr/core/providers/presets/types";
+import type { RouteDiagnostic } from "@ccr/core/routing/contracts";
 
 declare global {
   interface Window {
@@ -109,6 +110,7 @@ declare global {
       getConfig: () => Promise<AppConfig>;
       getFilePath?: (file: File) => string;
       getGatewayStatus: () => Promise<GatewayStatus>;
+      getRouteDiagnostics: () => Promise<RouteDiagnostic[]>;
       getLocalAgentProviderCandidates: () => Promise<LocalAgentProviderCandidate[]>;
       getOnboardingFinished: () => Promise<boolean>;
       getPendingProviderDeepLinks: () => Promise<ProviderDeepLinkRequest[]>;
