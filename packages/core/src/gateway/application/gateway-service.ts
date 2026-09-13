@@ -395,8 +395,14 @@ class GatewayService {
   // Compiled routing diagnostics for the current config. A rule carrying any
   // diagnostic compiles inactive and silently stops matching, so the management
   // UI needs these to show a configured rule that is not actually routing.
+  // An absent plugin returns [] and logs, because an empty array would
+  // otherwise read as "no problems" when it means "nothing was compiled".
   getCompiledRouteDiagnostics(): RouteDiagnostic[] {
-    return this.plugin?.getRouteDiagnostics() ?? [];
+    if (!this.plugin) {
+      console.warn("[routing] route diagnostics unavailable: no routing plugin is loaded for this config.");
+      return [];
+    }
+    return this.plugin.getRouteDiagnostics();
   }
 
   async updateConfig(config: AppConfig): Promise<void> {

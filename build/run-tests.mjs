@@ -42,16 +42,31 @@ async function runProject(project) {
 
   try {
     await new Promise((resolve, reject) => {
+      const childEnv = {
+        ...process.env,
+        CCR_INTERNAL_APP_DATA_DIR: path.join(testHome, "app-data"),
+        CCR_INTERNAL_HOME_DIR: testHome,
+        CCR_INTERNAL_USER_DATA_DIR: path.join(testHome, "user-data"),
+        HOME: testHome,
+        ...(runtime === "electron" ? { ELECTRON_RUN_AS_NODE: "1" } : {})
+      };
+      // Variables that point at real stores or paths override any home-derived
+      // location, so inheriting them lets a test reach the live profile (a
+      // credential read) or emit paths outside the throwaway home (argv
+      // assertions). Delete rather than set undefined: spawn does not reliably
+      // skip an undefined value.
+      for (const name of [
+        "CLAUDE_CONFIG_DIR",
+        "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+        "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+        "CCR_CLAUDE_CODE_MCP_CONFIG",
+        "CODEXL_CLAUDE_CODE_MCP_CONFIG"
+      ]) {
+        delete childEnv[name];
+      }
       const child = spawn(executable, ["--test", ...testFiles], {
         cwd: projectRoot,
-        env: {
-          ...process.env,
-          CCR_INTERNAL_APP_DATA_DIR: path.join(testHome, "app-data"),
-          CCR_INTERNAL_HOME_DIR: testHome,
-          CCR_INTERNAL_USER_DATA_DIR: path.join(testHome, "user-data"),
-          HOME: testHome,
-          ...(runtime === "electron" ? { ELECTRON_RUN_AS_NODE: "1" } : {})
-        },
+        env: childEnv,
         stdio: "inherit"
       });
 
