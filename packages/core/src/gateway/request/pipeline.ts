@@ -1127,15 +1127,28 @@ async function routeRequestWithCoreGatewayPlugin(input: {
       signal: controller.signal
     });
     if (response.status === 404 || response.status === 405) {
+      // Expected when the running core runtime predates the router plugin.
       return undefined;
     }
     if (!response.ok || !response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+      // Falling through here routes the request with a different plugin
+      // instance than the one that answered the core runtime call, so the
+      // reason matters when the two disagree.
+      console.warn(
+        `[routing] core router plugin call failed (status ${response.status}, ` +
+        `content-type ${response.headers.get("content-type") ?? "none"}); ` +
+        "falling back to the in-process router plugin."
+      );
       await response.body?.cancel().catch(() => undefined);
       return undefined;
     }
     const payload = await response.json().catch(() => undefined) as unknown;
     return normalizeCoreRouterPluginResponse(payload);
-  } catch {
+  } catch (error) {
+    console.warn(
+      `[routing] core router plugin call errored (${formatError(error)}); ` +
+      "falling back to the in-process router plugin."
+    );
     return undefined;
   } finally {
     clearTimeout(timeout);
