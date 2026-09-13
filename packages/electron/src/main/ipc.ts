@@ -118,6 +118,7 @@ ipcMain.handle(IPC_CHANNELS.appGetProviderPresets, () => getProviderPresets());
 ipcMain.handle(IPC_CHANNELS.appGetAgentAnalysis, (_event, filter?: AgentAnalysisFilter) => getAgentAnalysis(filter));
 ipcMain.handle(IPC_CHANNELS.appGetAgentTracePayload, (_event, request: AgentAnalysisTracePayloadRequest) => getAgentTracePayload(request));
 ipcMain.handle(IPC_CHANNELS.appGetGatewayStatus, () => gatewayService.getStatus());
+ipcMain.handle(IPC_CHANNELS.appGetRouteDiagnostics, () => gatewayService.getCompiledRouteDiagnostics());
 ipcMain.handle(IPC_CHANNELS.appGetProxyCertificateStatus, () => proxyService.getCertificateStatus());
 ipcMain.handle(IPC_CHANNELS.appGetProxyNetworkCaptures, () => proxyService.getNetworkCaptures());
 ipcMain.handle(IPC_CHANNELS.appGetProxyStatus, () => proxyService.getStatus());

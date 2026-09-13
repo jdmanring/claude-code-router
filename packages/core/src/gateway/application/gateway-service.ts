@@ -26,6 +26,7 @@ import { GatewayHttpRequestHandler } from "@ccr/core/gateway/http/request-handle
 import { gatewayRuntimeConfigRevision } from "@ccr/core/gateway/runtime-config-control";
 import { shouldRestartGatewayForRuntimeConfigChange } from "@ccr/core/gateway/runtime-change";
 import { RouteScriptRuntime } from "@ccr/core/routing/route-script-runtime";
+import type { RouteDiagnostic } from "@ccr/core/routing/contracts";
 import { buildRouteScriptInput } from "@ccr/core/routing/route-script-context";
 import { compileRouterConfig } from "@ccr/core/routing/config-compiler";
 import { normalizeRouteScriptResult, scriptResultPreview } from "@ccr/core/routing/route-script-result";
@@ -389,6 +390,13 @@ class GatewayService {
         ? gatewayNetworkEndpoints(this.config.gateway.host, this.config.gateway.port)
         : this.status.networkEndpoints
     };
+  }
+
+  // Compiled routing diagnostics for the current config. A rule carrying any
+  // diagnostic compiles inactive and silently stops matching, so the management
+  // UI needs these to show a configured rule that is not actually routing.
+  getCompiledRouteDiagnostics(): RouteDiagnostic[] {
+    return this.plugin?.getRouteDiagnostics() ?? [];
   }
 
   async updateConfig(config: AppConfig): Promise<void> {

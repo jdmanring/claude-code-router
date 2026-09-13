@@ -1106,7 +1106,29 @@ function ProfileRoutingSettings({
 }) {
   const t = useAppText();
   const [ruleDialog, setRuleDialog] = useState<{ draft: AddRoutingRuleDraft; index?: number }>();
+  const [ruleDiagnostics, setRuleDiagnostics] = useState<Record<string, string[]>>();
   const canSubmitRule = ruleDialog ? isRoutingRuleDraftSubmittable(ruleDialog.draft) : false;
+  const routingRulesKey = draft.routingRules.map((rule) => `${rule.id}:${rule.fallback?.models.join(",") ?? ""}`).join("|");
+  useEffect(() => {
+    let active = true;
+    void window.ccr?.getRouteDiagnostics?.()
+      .then((diagnostics) => {
+        if (!active) {
+          return;
+        }
+        const byRule: Record<string, string[]> = {};
+        for (const diagnostic of diagnostics) {
+          if (diagnostic.ruleId) {
+            (byRule[diagnostic.ruleId] ??= []).push(diagnostic.message);
+          }
+        }
+        setRuleDiagnostics(byRule);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [routingRulesKey]);
 
   function openAddRuleDialog() {
     setRuleDialog({
@@ -1185,7 +1207,10 @@ function ProfileRoutingSettings({
                 <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-[12px] text-muted-foreground">
                   {t("No routing rules configured")}
                 </div>
-              ) : draft.routingRules.map((rule, index) => (
+              ) : draft.routingRules.map((rule, index) => {
+                const diagnostics = ruleDiagnostics?.[rule.id] ?? [];
+                const inactive = rule.enabled && diagnostics.length > 0;
+                return (
                 <div className="grid min-w-0 grid-cols-[1fr_auto] gap-2 rounded-md border border-border px-3 py-2" key={`${rule.id}-${index}`}>
                   <button
                     className="min-w-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
@@ -1195,6 +1220,7 @@ function ProfileRoutingSettings({
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                       <span className="truncate text-[12px] font-semibold">{rule.name || t("Unnamed")}</span>
                       <Badge variant={rule.enabled ? "success" : "outline"}>{t(rule.enabled ? "Enabled" : "Disabled")}</Badge>
+                      {inactive ? <Badge variant="danger">{t("Not routing")}</Badge> : null}
                       <Badge variant="outline">{t(routerRuleTypeLabel(rule.type))}</Badge>
                     </div>
                     <div className="mt-1 min-w-0 truncate text-[11px] text-muted-foreground" title={formatRouterRuleCondition(rule)}>
@@ -1203,6 +1229,12 @@ function ProfileRoutingSettings({
                     <div className="mt-0.5 min-w-0 truncate font-mono text-[11px] text-muted-foreground" title={formatRouterRuleTarget(rule)}>
                       {formatRouterRuleTarget(rule)}
                     </div>
+                    {diagnostics.length > 0 ? (
+                      <div className="mt-1 min-w-0 text-[11px] text-red-700" title={diagnostics.join("\n")}>
+                        {diagnostics[0]}
+                        {diagnostics.length > 1 ? ` ${t("(+{count} more)").replace("{count}", String(diagnostics.length - 1))}` : ""}
+                      </div>
+                    ) : null}
                   </button>
                   <div className="flex shrink-0 items-center gap-1">
                     <Button aria-label={t("Edit")} onClick={() => openEditRuleDialog(index)} size="iconSm" title={t("Edit")} type="button" variant="ghost">
@@ -1213,7 +1245,8 @@ function ProfileRoutingSettings({
                     </Button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

@@ -120,6 +120,7 @@ const webClientBridge: CcrApi = {
   getAppInfo: () => rpc("getAppInfo") as ReturnType<CcrApi["getAppInfo"]>,
   getConfig: () => rpc("getConfig") as ReturnType<CcrApi["getConfig"]>,
   getGatewayStatus: () => rpc("getGatewayStatus") as ReturnType<CcrApi["getGatewayStatus"]>,
+  getRouteDiagnostics: () => rpc("getRouteDiagnostics") as ReturnType<CcrApi["getRouteDiagnostics"]>,
   getLocalAgentProviderCandidates: () => rpc("getLocalAgentProviderCandidates") as ReturnType<CcrApi["getLocalAgentProviderCandidates"]>,
   getOnboardingFinished: () => rpc("getOnboardingFinished") as ReturnType<CcrApi["getOnboardingFinished"]>,
   getPendingProviderDeepLinks: () => Promise.resolve([]),
