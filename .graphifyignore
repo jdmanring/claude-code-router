@@ -1,0 +1,12 @@
+node_modules
+dist
+.test-dist
+release
+release-local
+tmp
+graphify-out
+.serena
+.git
+docs/dist
+docs/.astro
+extension/**/node_modules

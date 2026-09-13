@@ -301,11 +301,22 @@ function claudeCodeOauthProviderPlugin() {
 async function withClaudeCodeHome(run) {
   const home = mkdtempSync(path.join(os.tmpdir(), "ccr-claude-code-hook-test-"));
   const previousHome = process.env.HOME;
+  const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
+  const previousSecureStorageDir = process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
   process.env.HOME = home;
+  // The credential scan reads the secure-storage config dir before any
+  // HOME-derived path. An inherited CLAUDE_CONFIG_DIR (a real profile dir in
+  // a router-launched session) would escape this temp home and let assertions
+  // read a live credential, and it also changes the derived keychain service
+  // name. Unset both so the scan stays inside the temp home.
+  delete process.env.CLAUDE_CONFIG_DIR;
+  delete process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
   try {
     await run(home);
   } finally {
     restoreEnv("HOME", previousHome);
+    restoreEnv("CLAUDE_CONFIG_DIR", previousConfigDir);
+    restoreEnv("CLAUDE_SECURESTORAGE_CONFIG_DIR", previousSecureStorageDir);
     rmSync(home, { force: true, recursive: true });
   }
 }
