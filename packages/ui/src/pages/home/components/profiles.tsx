@@ -1107,6 +1107,7 @@ function ProfileRoutingSettings({
   const t = useAppText();
   const [ruleDialog, setRuleDialog] = useState<{ draft: AddRoutingRuleDraft; index?: number }>();
   const [ruleDiagnostics, setRuleDiagnostics] = useState<Record<string, string[]>>();
+  const [unattributedDiagnostics, setUnattributedDiagnostics] = useState<string[]>([]);
   const canSubmitRule = ruleDialog ? isRoutingRuleDraftSubmittable(ruleDialog.draft) : false;
   const routingRulesKey = draft.routingRules.map((rule) => `${rule.id}:${rule.fallback?.models.join(",") ?? ""}`).join("|");
   useEffect(() => {
@@ -1117,12 +1118,18 @@ function ProfileRoutingSettings({
           return;
         }
         const byRule: Record<string, string[]> = {};
+        // Diagnostics for the default fallback and the profile model carry no
+        // rule id, so bucketing on ruleId alone would drop them silently.
+        const unattributed: string[] = [];
         for (const diagnostic of diagnostics) {
           if (diagnostic.ruleId) {
             (byRule[diagnostic.ruleId] ??= []).push(diagnostic.message);
+          } else {
+            unattributed.push(diagnostic.message);
           }
         }
         setRuleDiagnostics(byRule);
+        setUnattributedDiagnostics(unattributed);
       })
       .catch(() => undefined);
     return () => {
@@ -1248,6 +1255,14 @@ function ProfileRoutingSettings({
                 );
               })}
             </div>
+            {unattributedDiagnostics.length > 0 ? (
+              <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+                <div className="font-semibold">{t("Configuration problems")}</div>
+                {unattributedDiagnostics.map((message, index) => (
+                  <div className="mt-0.5 break-words" key={`${index}-${message}`}>{message}</div>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

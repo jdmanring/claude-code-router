@@ -2349,6 +2349,7 @@ export const appCopy: Record<ResolvedLanguage, AppCopy> = {
       "No updates available": "当前已是最新版本",
       "Not installed": "未安装",
       "Not routing": "未生效",
+      "Configuration problems": "配置问题",
       "(+{count} more)": "（另有 {count} 条）",
       "Not set": "未设置",
       "Pause capture": "暂停捕获",

@@ -1162,6 +1162,12 @@ function LogRouteHopDetails({ hop, index }: { hop: RequestRouteTraceHop; index: 
   const explanation = [hop.decision?.source, hop.decision?.ruleName ?? hop.decision?.ruleId, hop.decision?.reason]
     .filter(Boolean)
     .join(" · ");
+  // The stored trace already carries the compiler diagnostics for this hop; a
+  // request routed by a fallback still records why its own rule did not apply.
+  const diagnostics = (hop.decision?.diagnostics ?? [])
+    .map((diagnostic) => diagnostic.message)
+    .filter(Boolean)
+    .join("\n");
 
   return (
     <div className="min-w-0">
@@ -1182,11 +1188,12 @@ function LogRouteHopDetails({ hop, index }: { hop: RequestRouteTraceHop; index: 
           <div>{formatDuration(hop.durationMs)}</div>
         </div>
       </div>
-      {explanation || target || outcome ? (
+      {explanation || target || outcome || diagnostics ? (
         <div className="grid gap-2 border-b border-border py-3 text-[11px] md:grid-cols-3">
           {explanation ? <RouteHopDetail label={t("Decision")} value={explanation} /> : null}
           {target ? <RouteHopDetail label={t("Target")} mono value={target} /> : null}
           {outcome ? <RouteHopDetail danger={hop.status === "error"} label={t("Result")} value={outcome} /> : null}
+          {diagnostics ? <RouteHopDetail danger label={t("Diagnostics")} value={diagnostics} /> : null}
         </div>
       ) : null}
       <div className="pt-3">
