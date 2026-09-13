@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createDefaultAppConfig } from "@ccr/core/config/default-config.ts";
 import { pluginService } from "@ccr/core/plugins/service.ts";
-import { CCR_DESKTOP_APP_ENV } from "@ccr/core/runtime/desktop-app.ts";
+import { CCR_DESKTOP_APP_ENV, CCR_DESKTOP_APP_FORCE_ENV } from "@ccr/core/runtime/desktop-app.ts";
 
 test("plugin permissions gate dynamic gateway route registration", { skip: !process.env.CCR_INTERNAL_HOME_DIR }, async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ccr-plugin-permissions-"));
@@ -322,11 +322,16 @@ function baseConfig(dir) {
 
 async function withDesktopRuntime(run) {
   const previousDesktopApp = process.env[CCR_DESKTOP_APP_ENV];
+  const previousForce = process.env[CCR_DESKTOP_APP_FORCE_ENV];
   try {
     process.env[CCR_DESKTOP_APP_ENV] = "1";
+    // A Node process has no process.versions.electron, so the desktop gate
+    // needs this stand-in to reach the bundled-plugin paths being tested.
+    process.env[CCR_DESKTOP_APP_FORCE_ENV] = "1";
     return await run();
   } finally {
     restoreEnv(CCR_DESKTOP_APP_ENV, previousDesktopApp);
+    restoreEnv(CCR_DESKTOP_APP_FORCE_ENV, previousForce);
   }
 }
 

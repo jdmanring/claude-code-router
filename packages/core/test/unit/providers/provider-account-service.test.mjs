@@ -493,10 +493,19 @@ function useTemporaryHome(t, prefix) {
   const previousOsHome = process.env.HOME;
   const previousZcodeHome = process.env.ZCODE_HOME;
   const previousZcodeStorageDir = process.env.ZCODE_STORAGE_DIR;
+  const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
+  const previousSecureStorageDir = process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
+  const previousCustomOauthUrl = process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL;
   const home = mkdtempSync(path.join(os.tmpdir(), prefix));
   process.env.CCR_INTERNAL_HOME_DIR = home;
   delete process.env.ZCODE_HOME;
   delete process.env.ZCODE_STORAGE_DIR;
+  // The Claude credential scan resolves this dir ahead of HOME, so an
+  // inherited value from a router-launched session would point the fixture
+  // at the real profile store.
+  delete process.env.CLAUDE_CONFIG_DIR;
+  delete process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
+  delete process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL;
   t.after(() => {
     if (previousHome === undefined) {
       delete process.env.CCR_INTERNAL_HOME_DIR;
@@ -517,6 +526,21 @@ function useTemporaryHome(t, prefix) {
       delete process.env.ZCODE_STORAGE_DIR;
     } else {
       process.env.ZCODE_STORAGE_DIR = previousZcodeStorageDir;
+    }
+    if (previousConfigDir === undefined) {
+      delete process.env.CLAUDE_CONFIG_DIR;
+    } else {
+      process.env.CLAUDE_CONFIG_DIR = previousConfigDir;
+    }
+    if (previousSecureStorageDir === undefined) {
+      delete process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
+    } else {
+      process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR = previousSecureStorageDir;
+    }
+    if (previousCustomOauthUrl === undefined) {
+      delete process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL;
+    } else {
+      process.env.CLAUDE_CODE_CUSTOM_OAUTH_URL = previousCustomOauthUrl;
     }
     rmSync(home, { force: true, recursive: true });
   });
