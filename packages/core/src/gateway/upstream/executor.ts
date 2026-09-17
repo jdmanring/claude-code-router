@@ -417,6 +417,11 @@ export async function fetchUpstreamWithFallback(input: {
       path: input.path
     });
     const hasNextAttempt = index < attempts.length - 1;
+    // A backoff is only meaningful when the next attempt retries the same
+    // target. In model-chain mode every attempt is a distinct model, usually on
+    // a distinct provider with an independent quota, so pausing there makes the
+    // next provider wait out a limit that was never its own.
+    const nextAttemptRetriesSameTarget = hasNextAttempt && attempts[index + 1]?.model === plannedAttempt.model;
     const attemptUrl = rewriteRouteModelInUrl(input.upstreamUrl, attempt.model);
     const upstreamHeaders = {
       ...withCoreGatewayAuthHeader(
@@ -477,7 +482,7 @@ export async function fetchUpstreamWithFallback(input: {
       });
 
       if (hasNextAttempt && shouldFallbackAfterStatus(response.status, fallbackMode)) {
-        const delayMs = retryDelayAfterStatus(response.headers, failedAttempts.length);
+        const delayMs = nextAttemptRetriesSameTarget ? retryDelayAfterStatus(response.headers, failedAttempts.length) : 0;
         input.trace?.capture({
           attempt: attemptNumber,
           durationMs: Date.now() - attemptStartedAt,
@@ -538,7 +543,7 @@ export async function fetchUpstreamWithFallback(input: {
       };
     } catch (error) {
       const message = formatError(error);
-      const delayMs = hasNextAttempt && !input.signal?.aborted
+      const delayMs = nextAttemptRetriesSameTarget && !input.signal?.aborted
         ? retryDelayAfterNetworkError(failedAttempts.length)
         : 0;
       input.trace?.capture({
