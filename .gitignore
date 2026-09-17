@@ -24,6 +24,7 @@ blob-report
 # local build artifact, never commit
 *.appimage
 docker/local-ai-gateway/*.tgz
+packages/*/*.tgz
 
 # local code-graph and LSP indexes, regenerated per machine
 graphify-out
