@@ -1,8 +1,9 @@
 import electron from "electron";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -92,11 +93,60 @@ function resolveRuntime(runtime) {
   if (runtime !== "node-with-electron-fallback") {
     return runtime;
   }
+  const abi = nativeModuleAbi("better-sqlite3");
+  if (abi !== undefined) {
+    const current = Number(process.versions.modules);
+    if (abi === current) {
+      return "node";
+    }
+    console.warn(`[tests] better-sqlite3 is built for Node ABI ${abi} and this Node is ${current}; running under Electron.`);
+    return "electron";
+  }
+
+  // The module could not be read, so fall back to loading it. Keep stderr: a
+  // missing or broken install is not an ABI mismatch and should say so rather
+  // than quietly redirecting the whole suite to another runtime.
   const probe = spawnSync(process.execPath, [
     "-e",
     "const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.close();"
-  ], { stdio: "ignore" });
+  ], { encoding: "utf8", stdio: ["ignore", "ignore", "pipe"] });
+  if (probe.status !== 0) {
+    const reason = (probe.stderr ?? "").trim().split("\n")[0];
+    console.warn(`[tests] better-sqlite3 could not be loaded under Node, running under Electron. ${reason}`);
+  }
   return probe.status === 0 ? "node" : "electron";
+}
+
+/**
+ * The Node ABI a compiled addon was built for, or undefined when it cannot be
+ * read. Every addon exports `node_register_module_v<abi>`, so the number can be
+ * taken from the file without loading it, which is the very thing we are trying
+ * to establish is safe. A scan rather than a symbol-table parse, so one code
+ * path covers ELF, Mach-O and PE.
+ */
+function nativeModuleAbi(moduleName) {
+  let modulePath;
+  try {
+    modulePath = createRequire(import.meta.url).resolve(moduleName);
+  } catch {
+    return undefined;
+  }
+  const binary = path.join(path.dirname(modulePath), "build", "Release", `${moduleName.replace(/[^a-z0-9]+/gi, "_")}.node`);
+  const candidates = [binary, path.join(path.dirname(modulePath), "..", "build", "Release", "better_sqlite3.node")];
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) {
+      continue;
+    }
+    try {
+      const found = /node_register_module_v(\d+)/.exec(readFileSync(candidate).toString("latin1"));
+      if (found) {
+        return Number(found[1]);
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function findCompiledTests(dir) {

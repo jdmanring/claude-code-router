@@ -81,6 +81,7 @@ If OpenCode Go is unavailable or does not appear as an import option, connect `O
 | Field | Capability |
 | --- | --- |
 | Select preset provider | Applies a built-in provider template, including default endpoint, supported protocols, default models, icon, provider website, and sometimes account usage settings. Choose `Other / custom API endpoint` for any OpenAI, Anthropic, or Gemini compatible upstream. |
+| Preset values | Shown only for a preset whose endpoint needs something from you, such as an account ID. See [Presets that ask for a value](#presets-that-ask-for-a-value). |
 | Name | Internal CCR display name. It is also used by routing, model selectors, logs, and config references. Names must be unique. |
 | API endpoint | Upstream API base URL. It controls where requests are sent, and is also used for protocol probing, model discovery, icon detection, and safety checks. Preset providers hide it by default while adding, but it can be overridden in Advanced settings. Custom providers must provide it. |
 | API key | Default provider credential. When the credential pool is empty, model requests use this key. Protocol probing, model discovery, connection checks, and default usage fetching also use it. Only use a key issued for the selected endpoint. |
@@ -90,6 +91,24 @@ If OpenCode Go is unavailable or does not appear as an import option, connect `O
 | Check Connection | Sends real test requests with the current endpoint, API key, protocol, and selected models. It verifies key, model name, and protocol usability. |
 | Models to check | Model selection inside the connection-check confirmation dialog. Use it to test only some models. |
 | Check results | Shows whether each model is available, which protocol matched, and the upstream diagnostic message. Results are diagnostic. Add models through the main model selection when you want them saved. |
+
+## Presets that ask for a value
+
+A few providers address your account through the URL rather than a header. Cloudflare Workers AI puts an account ID in the path, and the same pattern appears with a project and region elsewhere. A preset for one of these cannot ship a fixed endpoint, so it declares the values it needs and the add dialog asks for them.
+
+Selecting such a preset shows one field per value, each with a hint about where to find it. The API endpoint field appears below them, read only, and updates as you type. It shows the remaining placeholders until every value is filled, so you can see what is still outstanding. The dialog will not let you add the provider until each value is present and valid.
+
+For Cloudflare Workers AI the endpoint is:
+
+```
+https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/v1
+```
+
+The account ID is the 32 character value on your Cloudflare dashboard overview, also printed by `wrangler whoami`.
+
+A value that contains a space, a slash, or a brace is rejected. Those characters would change the shape of the URL rather than fill in one part of it. A preset may also require a particular format, in which case a value that does not match is reported as such.
+
+Only the preset holds placeholders. The provider CCR saves always contains a finished URL, so routing, probing, and every other feature treat it like any other provider. Editing the provider later reads the values back out of the saved URL and fills the fields in again.
 
 ## Connectivity checks
 
