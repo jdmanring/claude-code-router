@@ -13,7 +13,7 @@ import {
   providerAccountConnectorsTextWithNewApiUserBalanceTemplate, providerAccountSnapshotCredentialLabel, providerAccountSnapshotLabel, ProviderAccountTestPath,
   ProviderAccountTestResult, providerBaseUrl, providerCapabilitiesSummary, ProviderCredentialDraft, ProviderDeepLinkPayload, ProviderDeepLinkRequest, providerDraftSafetyIssue, providerCredentialDraftPatchFromJson, providerHttpJsonConnectorFromDraft,
   providerBrowserConnectorFromDraft, providerBrowserCredentialsOptions,
-  ProviderConnectivityCheckReport, providerCapabilityBaseUrlForProtocol, providerConnectivityApiKeyFromDraft, providerDeepLinkDisplayIcon, providerDraftHasReadyCredentialPool, providerListItemKey, providerMatchesQuery, ProviderPreset, providerPresetIconUrls, providerProbeHasSupportedProtocol,
+  ProviderConnectivityCheckReport, providerCapabilityBaseUrlForProtocol, providerConnectivityApiKeyFromDraft, providerDeepLinkDisplayIcon, providerDraftHasReadyCredentialPool, providerListItemKey, providerMatchesQuery, ProviderPreset, presetVariableIssues, providerPresetIconUrls, providerProbeHasSupportedProtocol, resolvedPresetBaseUrl,
   providerDisplayIcon, providerGlobalBaseUrlForProbe, providerModelDisplayName, providerModelDisplayTitle, providerProbeModelsForProtocol, providerProtocolOptions, providerSelectableProtocolsFromProbe, providerUsageFieldPatch, ProviderUsageFieldTarget, providerUsageMethodOptions, Search, SelectControl,
   RefreshCw, resolveProviderDeepLinkPreset, ShieldCheck, splitLines, Switch, Tabs, TabsList, TabsTrigger, Textarea, Toggle, translatedProviderProtocolLabel, translateOptions,
   translateProbeProtocolMessage, Trash2, uniqueProviderName, uniqueProviderProtocols, useAppErrorText, useAppText, useEffect, useLayoutEffect, useMemo,
@@ -2006,6 +2006,16 @@ export function AddProviderForm({
   const customEndpoint = draft.presetId === customProviderPresetId;
   const importMode = Boolean(importProvider);
   const showBaseUrl = customEndpoint;
+  // A preset whose endpoint carries {placeholders} collects them here; the
+  // endpoint itself is derived, never typed.
+  const presetVariables = selectedPreset?.variables ?? [];
+  const presetVariableProblems = presetVariableIssues(selectedPreset, draft.presetVariables);
+  const resolvedPresetEndpoint = resolvedPresetBaseUrl(selectedPreset, draft.presetVariables);
+
+  function onChangePresetVariable(key: string, value: string) {
+    const nextValues = { ...draft.presetVariables, [key]: value };
+    onChange({ baseUrl: resolvedPresetBaseUrl(selectedPreset, nextValues), presetVariables: nextValues }, true);
+  }
   const selectedDisplayProtocols = uniqueProviderProtocols(draft.selectedProtocols);
   const detectedProtocol = selectedDisplayProtocols.length === 1
     ? selectedDisplayProtocols[0]
@@ -2195,6 +2205,7 @@ export function AddProviderForm({
       catalogModelMetadata: undefined,
       icon: "",
       modelDescriptions: undefined,
+      presetVariables: {},
       modelDisplayNames: preset?.defaultModelDisplayNames,
       modelMetadata: undefined,
       modelSearch: "",
@@ -2284,6 +2295,31 @@ export function AddProviderForm({
             <Field className="sm:col-span-2" label={t("Name")}>
               <Input value={draft.name} onChange={(event) => onChange({ name: event.target.value })} />
             </Field>
+            {presetVariables.map((variable) => {
+              const value = draft.presetVariables[variable.key] ?? "";
+              const problem = value.trim() ? presetVariableProblems[variable.key] : undefined;
+              return (
+                <Field className="sm:col-span-2" key={variable.key} label={t(variable.label)}>
+                  <Input
+                    aria-invalid={problem ? true : undefined}
+                    onChange={(event) => onChangePresetVariable(variable.key, event.target.value)}
+                    placeholder={variable.placeholder}
+                    value={value}
+                  />
+                  <p className={cn("min-h-4 text-[12px] leading-5", problem ? "text-destructive" : "text-muted-foreground")}>
+                    {problem ?? (variable.description ? t(variable.description) : "")}
+                  </p>
+                </Field>
+              );
+            })}
+            {presetVariables.length > 0 ? (
+              <Field className="sm:col-span-2" label={t("API endpoint")}>
+                <Input readOnly value={resolvedPresetEndpoint} />
+                <p className="min-h-4 text-[12px] leading-5 text-muted-foreground">
+                  {t("Built from the values above.")}
+                </p>
+              </Field>
+            ) : null}
             {showBaseUrl ? (
               <Field className="sm:col-span-2" label={t("API endpoint")}>
                 <Input value={draft.baseUrl} onChange={(event) => onChange({ baseUrl: event.target.value, icon: "" }, true)} />
@@ -3514,7 +3550,12 @@ export function AddProviderDialog({
   const wizardMode = mode === "add";
   const selectedPreset = findProviderPreset(draft.presetId);
   const localAgentImport = draft.providerPlugins.length > 0;
-  const providerIdentityReady = Boolean(importProvider) || Boolean(selectedPreset || draft.baseUrl.trim());
+  // A preset whose endpoint carries placeholders is not an identity until every
+  // declared value is supplied and acceptable, or the provider would be stored
+  // with a URL that cannot resolve.
+  const presetVariablesReady = Object.keys(presetVariableIssues(selectedPreset, draft.presetVariables)).length === 0;
+  const providerIdentityReady = Boolean(importProvider)
+    || (Boolean(selectedPreset || draft.baseUrl.trim()) && presetVariablesReady);
   const credentialPoolReady = providerDraftHasReadyCredentialPool(draft);
   const credentialReady = localAgentImport || Boolean(
     draft.credentialMode === "pool"

@@ -1,3 +1,4 @@
+import { templateIsUnresolved, templateMatchesResolvedUrl } from "@ccr/core/providers/presets/template";
 import {
   customProviderPresetId,
   type ProviderIdentitySafetyIssue,
@@ -111,6 +112,13 @@ function providerPresetIdentityMatchScore(preset: ProviderPreset, normalizedName
 }
 
 function providerEndpointMatchesBaseUrl(endpointBaseUrl: string, baseUrl: string): boolean {
+  // A templated endpoint cannot be parsed and compared segment by segment: the
+  // configured provider holds a resolved URL and the preset still holds the
+  // placeholder. Compare them as a pattern instead, so a provider created from
+  // the preset is still recognised as belonging to it.
+  if (templateIsUnresolved(endpointBaseUrl)) {
+    return templateMatchesResolvedUrl(trimTrailingSlash(endpointBaseUrl), trimTrailingSlash(baseUrl));
+  }
   const endpoint = parseProviderPresetUrl(endpointBaseUrl);
   const candidate = parseProviderPresetUrl(baseUrl);
   if (!endpoint || !candidate) {
@@ -144,4 +152,9 @@ function normalizeProviderPresetPath(value: string): string {
 
 function normalizeProviderIdentityText(value: string | undefined): string {
   return value?.trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "") ?? "";
+}
+
+function trimTrailingSlash(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.length > 1 && trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }

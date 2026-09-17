@@ -110,6 +110,8 @@ export type AddProviderDraft = {
   modelsText: string;
   name: string;
   presetId: string;
+  /** Values for a preset whose endpoint carries {placeholders}, keyed by variable. */
+  presetVariables: Record<string, string>;
   protocolDetectionMode: "auto" | "manual";
   providerPlugins: unknown[];
   protocol: GatewayProviderProtocol;

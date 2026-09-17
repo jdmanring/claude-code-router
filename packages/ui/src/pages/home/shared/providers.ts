@@ -43,6 +43,7 @@ import {
 import {
   primaryProviderPresetEndpoint as primaryProviderPresetEndpointFromPreset
 } from "@ccr/core/providers/presets/utils";
+import { extractTemplateValues, resolveTemplate, variableValueIssue } from "@ccr/core/providers/presets/template";
 import { newApiUserSelfConnectorConfig } from "@ccr/core/providers/new-api";
 import { normalizeProviderBaseUrl, providerUrlWithDefaultScheme } from "@ccr/core/providers/url";
 import {
@@ -658,6 +659,7 @@ export function createProviderDraftFromDeepLinkPayload(
     modelsText: models.join("\n"),
     name: uniqueProviderName(providers, baseName),
     presetId: preset?.id ?? customProviderPresetId,
+    presetVariables: presetVariablesFromBaseUrl(preset, baseUrl),
     protocolDetectionMode: "auto",
     providerPlugins: [],
     protocol,
@@ -755,6 +757,7 @@ export function createProviderDraft(providers: GatewayProviderConfig[]): AddProv
     modelsText: "",
     name: uniqueProviderName(providers),
     presetId: "",
+    presetVariables: {},
     protocolDetectionMode: "auto",
     providerPlugins: [],
     protocol: "openai_chat_completions",
@@ -792,6 +795,7 @@ export function createProviderDraftFromProvider(provider: GatewayProviderConfig)
     modelsText: provider.models.join("\n"),
     name: provider.name,
     presetId: preset?.id ?? customProviderPresetId,
+    presetVariables: presetVariablesFromBaseUrl(preset, baseUrl),
     protocolDetectionMode: provider.protocolDetectionMode === "manual" ? "manual" : "auto",
     providerPlugins: [],
     protocol,
@@ -2512,4 +2516,41 @@ function isProbeAuthorizationMissingMessage(message: string): boolean {
   const match = /^http\s+401\s*:\s*(.*)$/i.exec(normalized);
   const detail = match?.[1] ?? normalized;
   return detail.includes("header中未收到authorization参数") && detail.includes("无法进行身份验证");
+}
+
+/**
+ * The endpoint a draft should carry: the preset's template with the values
+ * supplied so far substituted in. A placeholder with nothing behind it stays
+ * visible, so the field shows what is still outstanding.
+ */
+export function resolvedPresetBaseUrl(preset: ProviderPreset | undefined, values: Record<string, string>): string {
+  const endpoint = preset ? primaryProviderPresetEndpointFromPreset(preset) : undefined;
+  return endpoint ? resolveTemplate(endpoint.baseUrl, values) : "";
+}
+
+/** Per-variable complaints for a draft, keyed by variable, empty when it is ready. */
+export function presetVariableIssues(
+  preset: ProviderPreset | undefined,
+  values: Record<string, string>
+): Record<string, string> {
+  const issues: Record<string, string> = {};
+  for (const variable of preset?.variables ?? []) {
+    const issue = variableValueIssue(variable, values[variable.key]);
+    if (issue) issues[variable.key] = issue;
+  }
+  return issues;
+}
+
+/**
+ * Values recovered from a provider's stored endpoint, so editing one created
+ * from a template shows what was filled in. A provider whose preset has no
+ * template, or whose URL was edited by hand, yields nothing.
+ */
+export function presetVariablesFromBaseUrl(
+  preset: ProviderPreset | undefined,
+  baseUrl: string
+): Record<string, string> {
+  const endpoint = preset ? primaryProviderPresetEndpointFromPreset(preset) : undefined;
+  if (!endpoint) return {};
+  return extractTemplateValues(endpoint.baseUrl, baseUrl.trim()) ?? {};
 }

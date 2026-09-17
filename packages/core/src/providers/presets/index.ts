@@ -44,6 +44,7 @@ import { vsllmProviderPreset } from "@ccr/core/providers/presets/vsllm/index";
 import { xkiroProviderPreset } from "@ccr/core/providers/presets/xkiro/index";
 import { yoloAutoProviderPreset } from "@ccr/core/providers/presets/yolo-auto/index";
 import { zyloaiProviderPreset } from "@ccr/core/providers/presets/zyloai/index";
+import { cloudflareWorkersAiProviderPreset } from "@ccr/core/providers/presets/cloudflare-workers-ai/index";
 import { code0ProviderPreset } from "@ccr/core/providers/presets/code0/index";
 import { deepSeekProviderPreset } from "@ccr/core/providers/presets/deepseek/index";
 import { electronHubProviderPreset } from "@ccr/core/providers/presets/electronhub/index";
@@ -158,6 +159,7 @@ export const providerPresets: ProviderPreset[] = [
   runApiProviderPreset,
   teamoRouterProviderPreset,
   unity2ProviderPreset,
+  cloudflareWorkersAiProviderPreset,
   code0ProviderPreset,
   claudeApiProviderPreset
 ];
