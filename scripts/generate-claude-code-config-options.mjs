@@ -593,14 +593,30 @@ function isEnvName(value) {
 }
 
 function writeJsonIfChanged(file, value) {
-  const content = `${JSON.stringify(value, null, 2)}\n`;
-  let previous = "";
+  let previousRaw = "";
   try {
-    previous = readFileSync(file, "utf8");
+    previousRaw = readFileSync(file, "utf8");
   } catch {
-    previous = "";
+    previousRaw = "";
   }
-  if (previous === content) {
+  // generatedAt is a fresh timestamp on every run, so comparing the whole
+  // payload never matches and the file is rewritten even when the upstream
+  // docs have not moved. That leaves the working tree dirty after any build.
+  // Keep the recorded timestamp when nothing else changed.
+  let next = value;
+  if (previousRaw) {
+    try {
+      const { generatedAt: previousAt, ...previousRest } = JSON.parse(previousRaw);
+      const { generatedAt: _unused, ...nextRest } = value;
+      if (previousAt && JSON.stringify(previousRest) === JSON.stringify(nextRest)) {
+        next = { ...value, generatedAt: previousAt };
+      }
+    } catch {
+      // An unreadable previous file is simply replaced.
+    }
+  }
+  const content = `${JSON.stringify(next, null, 2)}\n`;
+  if (previousRaw === content) {
     return;
   }
   mkdirSync(path.dirname(file), { recursive: true });
