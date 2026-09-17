@@ -16,7 +16,8 @@ import {
   grokDefaultSubscriptionEndpoint,
   grokProviderAccountConfig
 } from "@ccr/core/agents/local-providers/grok.ts";
-import { findProviderPreset } from "@ccr/core/providers/presets/index.ts";
+import { findProviderPreset, findProviderPresetByBaseUrl } from "@ccr/core/providers/presets/index.ts";
+import { communityProviderPresets } from "@ccr/core/providers/presets/community/index.ts";
 
 const localAgentProviderApiKey = "ccr-local-agent-login";
 const codexDefaultBaseUrl = "https://chatgpt.com/backend-api/codex";
@@ -706,4 +707,21 @@ test("the Electron Hub preset resolves by base URL and carries a usage connector
     connector?.mapping?.meters?.map((meter) => meter.id),
     ["credits", "input_tokens", "output_tokens"]
   );
+});
+
+test("community presets register without disturbing the dedicated ones", () => {
+  const zen = findProviderPresetByBaseUrl("https://opencode.ai/zen/v1");
+  const go = findProviderPresetByBaseUrl("https://opencode.ai/zen/go/v1");
+  // Zen and Go are separate services on neighbouring paths.
+  assert.ok(zen, "Zen resolves");
+  assert.ok(go, "Go resolves");
+  assert.notEqual(zen.id, go.id, "the two must not collapse into one preset");
+  assert.equal(go.id, "opencode-go");
+
+  // An imported provider must hold no account config rather than an empty one.
+  for (const preset of communityProviderPresets) {
+    assert.equal(preset.account, undefined, `${preset.id} carries no account config`);
+    assert.ok(preset.endpoints.length > 0, `${preset.id} has an endpoint`);
+    assert.ok(preset.aliases.length > 0, `${preset.id} has an alias`);
+  }
 });

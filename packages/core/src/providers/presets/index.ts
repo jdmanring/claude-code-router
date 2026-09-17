@@ -1,6 +1,7 @@
 import { anthropicProviderPreset } from "@ccr/core/providers/presets/anthropic/index";
 import { bailianProviderPreset } from "@ccr/core/providers/presets/bailian/index";
 import { claudeApiProviderPreset } from "@ccr/core/providers/presets/claudeapi/index";
+import { communityProviderPresets } from "@ccr/core/providers/presets/community/index";
 import { code0ProviderPreset } from "@ccr/core/providers/presets/code0/index";
 import { deepSeekProviderPreset } from "@ccr/core/providers/presets/deepseek/index";
 import { electronHubProviderPreset } from "@ccr/core/providers/presets/electronhub/index";
@@ -50,6 +51,7 @@ export const providerPresets: ProviderPreset[] = [
   openCodeGoProviderPreset,
   deepSeekProviderPreset,
   electronHubProviderPreset,
+  ...communityProviderPresets,
   xiaomiMimoProviderPreset,
   xiaomiMimoTokenPlanChinaProviderPreset,
   xiaomiMimoTokenPlanSingaporeProviderPreset,
