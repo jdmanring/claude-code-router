@@ -29,3 +29,6 @@ packages/*/*.tgz
 # local code-graph and LSP indexes, regenerated per machine
 graphify-out
 .serena
+
+# local binary-analysis ledger, keyed by each artifact's hash
+.reverify
