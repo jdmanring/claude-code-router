@@ -67,6 +67,38 @@ import zaiGlobalCodingProviderIconUrl from "@/assets/provider-icons/zai-global-c
 import zaiGlobalGeneralProviderIconUrl from "@/assets/provider-icons/zai-global-general.svg";
 import zhipuCnCodingProviderIconUrl from "@/assets/provider-icons/zhipu-cn-coding.png";
 import zhipuCnGeneralProviderIconUrl from "@/assets/provider-icons/zhipu-cn-general.png";
+import agnesFreeProviderIconUrl from "@/assets/provider-icons/agnes-free.png";
+import aihubmixProviderIconUrl from "@/assets/provider-icons/aihubmix.png";
+import aurikoProviderIconUrl from "@/assets/provider-icons/auriko.png";
+import bazaarlinkProviderIconUrl from "@/assets/provider-icons/bazaarlink.png";
+import cohereProviderIconUrl from "@/assets/provider-icons/cohere.png";
+import fastrouterProviderIconUrl from "@/assets/provider-icons/fastrouter.png";
+import groqProviderIconUrl from "@/assets/provider-icons/groq.png";
+import huggingfaceProviderIconUrl from "@/assets/provider-icons/huggingface.png";
+import internAiProviderIconUrl from "@/assets/provider-icons/intern-ai.png";
+import kiloProviderIconUrl from "@/assets/provider-icons/kilo.png";
+import literouterProviderIconUrl from "@/assets/provider-icons/literouter.png";
+import llmKiwiProviderIconUrl from "@/assets/provider-icons/llm-kiwi.png";
+import llm7ProviderIconUrl from "@/assets/provider-icons/llm7.png";
+import meganovaProviderIconUrl from "@/assets/provider-icons/meganova.png";
+import metaProviderIconUrl from "@/assets/provider-icons/meta.png";
+import nagaProviderIconUrl from "@/assets/provider-icons/naga.jpg";
+import ollamaProviderIconUrl from "@/assets/provider-icons/ollama.png";
+import orcarouterProviderIconUrl from "@/assets/provider-icons/orcarouter.png";
+import pollinationsProviderIconUrl from "@/assets/provider-icons/pollinations.png";
+import pooledProviderIconUrl from "@/assets/provider-icons/pooled.jpg";
+import routewayProviderIconUrl from "@/assets/provider-icons/routeway.png";
+import sambanovaProviderIconUrl from "@/assets/provider-icons/sambanova.png";
+import seaLionProviderIconUrl from "@/assets/provider-icons/sea-lion.png";
+import tokenreplyProviderIconUrl from "@/assets/provider-icons/tokenreply.png";
+import tokenrouterProviderIconUrl from "@/assets/provider-icons/tokenrouter.png";
+import v0ProviderIconUrl from "@/assets/provider-icons/v0.png";
+import veniceProviderIconUrl from "@/assets/provider-icons/venice.png";
+import vercelProviderIconUrl from "@/assets/provider-icons/vercel.png";
+import vsllmProviderIconUrl from "@/assets/provider-icons/vsllm.png";
+import xkiroProviderIconUrl from "@/assets/provider-icons/xkiro.png";
+import yoloAutoProviderIconUrl from "@/assets/provider-icons/yolo-auto.png";
+import zyloaiProviderIconUrl from "@/assets/provider-icons/zyloai.png";
 import openCodeProviderIconUrl from "@/assets/agent-logos/opencode.ico";
 import trayCyanIconUrl from "@/assets/tray-cyan.png";
 import trayOrangeIconUrl from "@/assets/tray-orange.png";
@@ -369,6 +401,38 @@ export const mcpStdioMessageModeOptions: Array<{ label: string; value: GatewayMc
 ];
 
 export const providerPresetIconUrls: Record<string, string> = {
+  "agnes-free": agnesFreeProviderIconUrl,
+  aihubmix: aihubmixProviderIconUrl,
+  auriko: aurikoProviderIconUrl,
+  bazaarlink: bazaarlinkProviderIconUrl,
+  cohere: cohereProviderIconUrl,
+  fastrouter: fastrouterProviderIconUrl,
+  groq: groqProviderIconUrl,
+  huggingface: huggingfaceProviderIconUrl,
+  "intern-ai": internAiProviderIconUrl,
+  kilo: kiloProviderIconUrl,
+  literouter: literouterProviderIconUrl,
+  "llm-kiwi": llmKiwiProviderIconUrl,
+  llm7: llm7ProviderIconUrl,
+  meganova: meganovaProviderIconUrl,
+  meta: metaProviderIconUrl,
+  naga: nagaProviderIconUrl,
+  ollama: ollamaProviderIconUrl,
+  orcarouter: orcarouterProviderIconUrl,
+  pollinations: pollinationsProviderIconUrl,
+  pooled: pooledProviderIconUrl,
+  routeway: routewayProviderIconUrl,
+  sambanova: sambanovaProviderIconUrl,
+  "sea-lion": seaLionProviderIconUrl,
+  tokenreply: tokenreplyProviderIconUrl,
+  tokenrouter: tokenrouterProviderIconUrl,
+  v0: v0ProviderIconUrl,
+  venice: veniceProviderIconUrl,
+  vercel: vercelProviderIconUrl,
+  vsllm: vsllmProviderIconUrl,
+  xkiro: xkiroProviderIconUrl,
+  "yolo-auto": yoloAutoProviderIconUrl,
+  zyloai: zyloaiProviderIconUrl,
   anthropic: anthropicProviderIconUrl,
   bailian: bailianProviderIconUrl,
   claudeapi: claudeapiProviderIconUrl,

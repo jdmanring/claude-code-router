@@ -3,6 +3,8 @@ import test from "node:test";
 import { createDefaultAppConfig } from "@ccr/core/config/default-config";
 import { ModelRegistry } from "@ccr/core/routing/model-registry";
 import { renameProviderReferences } from "@ccr/ui/pages/home/shared/provider-references";
+import { providerPresetIconUrls } from "@ccr/ui/pages/home/shared/options";
+import { providerPresets } from "@ccr/core/providers/presets/index";
 
 test("provider rename migrates profile and router model selectors to resolvable names", () => {
   const config = createDefaultAppConfig();
@@ -43,4 +45,12 @@ test("provider rename handles Fusion and known plugin targets without rewriting 
   assert.equal(fusion.instructions?.append, "Old/model");
   assert.equal(fusion.metadata?.custom, "Old/model");
   assert.deepEqual(renamed.plugins[0].config, { targetProvider: "New", targetModel: "model", routing: { default: "New/default", modelMap: { incoming: "New/mapped" }, rules: [{ target: "New/routed", model: "Old/incoming" }] }, apiKey: "Old/secret" });
+});
+
+test("every bundled provider icon maps to a registered preset", () => {
+  const presetIds = new Set(providerPresets.map((preset) => preset.id));
+  for (const id of Object.keys(providerPresetIconUrls)) {
+    assert.ok(presetIds.has(id), `icon mapped for unknown preset id: ${id}`);
+    assert.ok(providerPresetIconUrls[id], `icon for ${id} resolves to a url`);
+  }
 });
