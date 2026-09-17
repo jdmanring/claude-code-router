@@ -8,20 +8,21 @@
 
 const cooldowns = new Map<string, number>();
 
-export const maxTargetCooldownMs = 5 * 60_000;
+const maxTargetCooldownMs = 5 * 60_000;
 
-export function markTargetCoolingDown(target: string | undefined, durationMs: number, now = Date.now()): void {
+export function markTargetCoolingDown(target: string | undefined, durationMs: number): void {
   if (!target || !Number.isFinite(durationMs) || durationMs <= 0) return;
-  const until = now + Math.min(durationMs, maxTargetCooldownMs);
+  const until = Date.now() + Math.min(durationMs, maxTargetCooldownMs);
   // Never shorten a cooldown another response already earned.
   if ((cooldowns.get(target) ?? 0) >= until) return;
   cooldowns.set(target, until);
 }
 
-export function targetCooldownRemainingMs(target: string | undefined, now = Date.now()): number {
+export function targetCooldownRemainingMs(target: string | undefined): number {
   if (!target) return 0;
   const until = cooldowns.get(target);
   if (until === undefined) return 0;
+  const now = Date.now();
   if (until <= now) {
     cooldowns.delete(target);
     return 0;

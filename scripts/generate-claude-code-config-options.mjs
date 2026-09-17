@@ -603,17 +603,15 @@ function writeJsonIfChanged(file, value) {
   // payload never matches and the file is rewritten even when the upstream
   // docs have not moved. That leaves the working tree dirty after any build.
   // Keep the recorded timestamp when nothing else changed.
+  const withoutStamp = (value) => JSON.stringify({ ...value, generatedAt: "" });
   let next = value;
-  if (previousRaw) {
-    try {
-      const { generatedAt: previousAt, ...previousRest } = JSON.parse(previousRaw);
-      const { generatedAt: _unused, ...nextRest } = value;
-      if (previousAt && JSON.stringify(previousRest) === JSON.stringify(nextRest)) {
-        next = { ...value, generatedAt: previousAt };
-      }
-    } catch {
-      // An unreadable previous file is simply replaced.
+  try {
+    const previous = JSON.parse(previousRaw);
+    if (previous.generatedAt && withoutStamp(previous) === withoutStamp(value)) {
+      next = { ...value, generatedAt: previous.generatedAt };
     }
+  } catch {
+    // No readable previous file: write the new one as it stands.
   }
   const content = `${JSON.stringify(next, null, 2)}\n`;
   if (previousRaw === content) {

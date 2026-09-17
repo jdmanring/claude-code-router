@@ -6,7 +6,6 @@
 //   node scripts/ccr-log.mjs --limit 200
 //   node scripts/ccr-log.mjs --trace 6512    per-attempt trace for one request
 //   node scripts/ccr-log.mjs --errors        distinct upstream error bodies
-//   node scripts/ccr-log.mjs --agent-only    drop connectivity-check traffic
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
@@ -29,12 +28,10 @@ if (!existsSync(dbPath)) {
 }
 const db = new DatabaseSync(dbPath, { readOnly: true });
 
-const agentOnly = has("--agent-only");
 const since = arg("--since");
 const limit = Number(arg("--limit", "50"));
 const where = [];
 if (since) where.push(`l.id > ${Number(since)}`);
-if (agentOnly) where.push(`l.client NOT LIKE '%connectivity%'`);
 const whereSql = where.length ? `where ${where.join(" and ")}` : "";
 
 // Route hops are not always persisted to request_route_hops; trace_json always has them.
@@ -43,19 +40,20 @@ function attemptsOf(traceJson) {
   let parsed;
   try { parsed = JSON.parse(traceJson); } catch { return []; }
   return (parsed.hops ?? [])
-    .filter((hop) => hop.name === "upstream.attempt.outcome")
+    .filter((hop) => hop.name === "upstream.attempt.outcome" || hop.name === "upstream.attempt.skipped")
     .map((hop) => ({
       delayMs: hop.outcome?.retryDelayMs ?? 0,
       error: hop.outcome?.error,
       model: hop.target?.model ?? "?",
       provider: hop.target?.provider ?? "?",
+      skippedForMs: hop.name === "upstream.attempt.skipped" ? hop.outcome?.cooldownRemainingMs ?? 0 : undefined,
       status: hop.outcome?.statusCode
     }));
 }
 
 const rows = db.prepare(`
-  select l.id, l.created_at, l.client, l.provider, l.requested_model, l.resolved_model,
-         l.status_code, l.ok, l.duration_ms, l.response_body_text, t.trace_json
+  select l.id, l.provider, l.status_code, l.ok, l.duration_ms,
+         l.response_body_text, t.trace_json
   from request_logs l left join request_route_traces t on t.request_log_id = l.id
   ${whereSql} order by l.id desc limit ${Number.isFinite(limit) ? limit : 50}
 `).all().reverse();
@@ -71,8 +69,11 @@ if (traceId) {
   if (!row) { console.error(`Request ${traceId} not found.`); process.exit(1); }
   console.log(`request ${row.id}  status ${row.status_code}  ${row.duration_ms}ms`);
   for (const [i, a] of attemptsOf(row.trace_json).entries()) {
+    const label = a.skippedForMs === undefined
+      ? `${String(a.status ?? "-").padEnd(4)} ${a.provider} / ${a.model}`
+      : `skip ${a.model}  cooling for another ${a.skippedForMs}ms`;
     const wait = a.delayMs > 0 ? `  waited ${a.delayMs}ms` : "";
-    console.log(`  ${String(i + 1).padStart(2)}. ${String(a.status ?? "-").padEnd(4)} ${a.provider} / ${a.model}${wait}${a.error ? `  ${a.error}` : ""}`);
+    console.log(`  ${String(i + 1).padStart(2)}. ${label}${wait}${a.error ? `  ${a.error}` : ""}`);
   }
   if (row.response_body_text) console.log(`\n  body: ${row.response_body_text.slice(0, 500)}`);
   process.exit(0);
@@ -94,13 +95,19 @@ if (has("--errors")) {
   process.exit(0);
 }
 
-const answered = new Map(); const failed = new Map();
+const answered = new Map(); const failed = new Map(); const skipped = new Map();
 let attemptTotal = 0; let waited = 0; let okCount = 0;
 const bump = (map, key) => map.set(key, (map.get(key) ?? 0) + 1);
 
 for (const row of rows) {
   if (row.ok) okCount += 1;
   for (const a of attemptsOf(row.trace_json)) {
+    if (a.skippedForMs !== undefined) {
+      // The skip is recorded before the provider name is resolved, and the
+      // cooldown is keyed by model, so the model is the meaningful label.
+      bump(skipped, a.model);
+      continue;
+    }
     attemptTotal += 1;
     waited += a.delayMs ?? 0;
     bump(a.status === 200 ? answered : failed, `${a.provider} (${a.status ?? "error"})`);
@@ -120,9 +127,4 @@ const show = (title, map) => {
 };
 show("answered:", answered);
 show("failed attempts:", failed);
-
-const slow = rows.filter((r) => r.duration_ms > 10_000).sort((a, b) => b.duration_ms - a.duration_ms).slice(0, 5);
-if (slow.length) {
-  console.log("slowest:");
-  for (const r of slow) console.log(`  ${pad(r.duration_ms)}ms  id ${r.id}  ${r.provider}  status ${r.status_code}`);
-}
+show("skipped while cooling down:", skipped);
