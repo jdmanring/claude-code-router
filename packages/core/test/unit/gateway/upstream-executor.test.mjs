@@ -571,3 +571,65 @@ test("model-chain fallback rebuilds every protocol attempt from the canonical re
     globalThis.fetch = originalFetch;
   }
 });
+
+test("model-chain fallback moves to a different model without waiting out the failed provider's backoff", async () => {
+  const config = {
+    Providers: [
+      {
+        capabilities: [{ baseUrl: "https://primary.example", type: "anthropic_messages" }],
+        id: "primary",
+        models: ["model-a"],
+        name: "Primary"
+      },
+      {
+        capabilities: [{ baseUrl: "https://secondary.example", type: "anthropic_messages" }],
+        id: "secondary",
+        models: ["model-b"],
+        name: "Secondary"
+      }
+    ],
+    Router: { fallback: { mode: "off", models: [], retryCount: 0 }, rules: [] },
+    virtualModelProfiles: []
+  };
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const scheduledBackoffsMs = [];
+  let fetchCount = 0;
+
+  globalThis.fetch = async () => {
+    fetchCount += 1;
+    // The exhausted provider asks for a 30s pause before it is retried.
+    return fetchCount === 1
+      ? new Response("{}", { headers: { "retry-after": "30" }, status: 429 })
+      : new Response('{"ok":true}', { status: 200 });
+  };
+  globalThis.setTimeout = (callback, ms, ...args) => {
+    if (typeof ms === "number" && ms >= 1000) {
+      scheduledBackoffsMs.push(ms);
+    }
+    return originalSetTimeout(callback, ms, ...args);
+  };
+
+  try {
+    const result = await fetchUpstreamWithFallback({
+      body: Buffer.from('{"messages":[],"model":"Primary/model-a"}'),
+      config,
+      coreAuthToken: "core-token",
+      fallback: { mode: "model-chain", models: ["Secondary/model-b"], retryCount: 0 },
+      headers: {},
+      method: "POST",
+      path: "/v1/messages",
+      routedModel: "Primary/model-a",
+      upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+    });
+
+    assert.equal(result.response.status, 200);
+    assert.equal(fetchCount, 2);
+    // The second attempt is a different model on a different provider with its
+    // own quota, so the first provider's retry-after must not stall it.
+    assert.deepEqual(scheduledBackoffsMs, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
