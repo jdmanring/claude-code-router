@@ -19,6 +19,7 @@ import { resolveGatewayPublicModelId } from "@ccr/core/gateway/features/model-di
 import { activeProviderCredentials, findProviderByPublicOrInternalName, findProviderCredentialBySlug, normalizedProviderCapabilities, parseProviderCredentialInternalName, providerCapabilityForClientProtocol, providerCapabilityInternalName, providerCapabilityNameMatches, providerCredentialInternalName, providerCredentialPriority, providerCredentialRuntimeId, providerCredentialSlug, providerProtocolForClientProtocol, sanitizeHeaderValue } from "@ccr/core/providers/runtime-topology";
 import { delay } from "@ccr/core/gateway/internal/clock";
 import { retryDelayAfterNetworkError, retryDelayAfterStatus, shouldFallbackAfterStatus } from "@ccr/core/gateway/upstream/retry-policy";
+import { ccrRoutedModelHeader } from "@ccr/core/gateway/core-runtime/router-plugin-contract";
 import { claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta, UpstreamRequestError } from "@ccr/core/gateway/internal/shared";
 import type { ApiKeyLimitUsage, ProviderCredentialRoutingTarget, UpstreamAttempt, UpstreamFailedAttempt, UpstreamFetchResult } from "@ccr/core/gateway/internal/shared";
 import type { RouteTraceObserver } from "@ccr/core/observability/route-trace";
@@ -311,6 +312,19 @@ export async function fetchUpstreamWithFallback(input: {
     planningRouting.body,
     planningRouting.routedModel
   );
+  // rewriteFallbackForProtocol maps the configured chain index for index, so
+  // these two lists pair each internal capability selector with the selector
+  // the user actually configured. The core gateway resolves a request's target
+  // provider from x-ccr-routed-model before it reads the body, and the request
+  // pipeline stamps that header once from the primary model, so every fallback
+  // attempt needs its own value or it resolves back to the provider that just
+  // failed.
+  const configuredFallbackSelectors = new Map(
+    planningRouting.fallback.models.flatMap((model, modelIndex) => {
+      const configured = input.fallback.models[modelIndex];
+      return model && configured ? [[model, configured] as [string, string]] : [];
+    })
+  );
   const failedAttempts: UpstreamFailedAttempt[] = [];
   const attemptRoutingCache = new Map<string | undefined, {
     body?: Buffer;
@@ -416,6 +430,18 @@ export async function fetchUpstreamWithFallback(input: {
       method: input.method,
       path: input.path
     });
+    const routedModelBefore = attempt.headers?.[ccrRoutedModelHeader] ?? attemptHeaders[ccrRoutedModelHeader];
+    // Empty is never a key: the map filters falsy selectors out.
+    const configuredAttemptSelector = configuredFallbackSelectors.get(plannedAttempt.model ?? "");
+    const routedModelHeaderValue = configuredAttemptSelector === undefined
+      ? undefined
+      : sanitizeHeaderValue(configuredAttemptSelector);
+    if (routedModelHeaderValue !== undefined && routedModelHeaderValue !== routedModelBefore) {
+      attempt.headers = {
+        ...(attempt.headers ?? attemptHeaders),
+        [ccrRoutedModelHeader]: routedModelHeaderValue
+      };
+    }
     const hasNextAttempt = index < attempts.length - 1;
     // A backoff is only meaningful when the next attempt retries the same
     // target. In model-chain mode every attempt is a distinct model, usually on
@@ -453,8 +479,9 @@ export async function fetchUpstreamWithFallback(input: {
           : []),
         ...(attemptUrl !== input.upstreamUrl
           ? [{ after: attemptUrl, before: input.upstreamUrl, operation: "replace" as const, path: "/url", scope: "url" as const }]
-          : [])
-      ],
+          : []),
+        routeTraceChange("headers", `/headers/${ccrRoutedModelHeader}`, routedModelBefore, attempt.headers?.[ccrRoutedModelHeader])
+      ].filter(isRouteTraceChange),
       durationMs: attemptStartedAt - attemptPreparationStartedAt,
       kind: "attempt",
       name: "upstream.attempt.prepare",
