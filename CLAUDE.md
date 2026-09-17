@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Claude Code Router (CCR): a local model gateway and control plane for coding agents (Claude Code, Codex, Grok CLI, Kimi CLI, Kilo Code, OpenCode, Pi, ZCode, WorkBuddy). Agents hit one local endpoint; CCR routes to configured providers with retries, credential pools, routing rules, and request logging. Ships as an Electron desktop app, an npm CLI (`@musistudio/claude-code-router`, bin `ccr`), and a Docker image. Node >= 22 required.
 
-This clone's `origin` is upstream `musistudio/claude-code-router` - never push here.
+This clone's `origin` is upstream `musistudio/claude-code-router` - never push here. James's fork is the `jdmanring` remote, and `main` tracks `jdmanring/main`; push branches and `main` there only. An ingest merge carries upstream contributors' commit messages verbatim, which the global pre-push message linter rejects for em-dashes and long subjects; confirm with `git log -1 --format=%an` that every flagged commit is an upstream author, then push with `--no-verify`. Rewriting those messages would permanently diverge the fork.
 
 ## Commands
 
@@ -25,15 +25,19 @@ npm run typecheck           # tsc --noEmit at root (only type gate; no per-packa
 npm test                    # all workspaces + architecture tests
 npm run test:core           # one workspace (also :ui, :electron, :cli)
 npm run test:architecture   # build-boundary rules in tests/architecture/
-npm run test:unit -w @claude-code-router/core       # scope filter (workspace scripts:
-npm run test:integration -w @claude-code-router/ui   # unit/integration; ui also has component)
+npm run test:unit -w @claude-code-router/core        # scope filter; not every workspace has
+npm run test:integration -w @claude-code-router/ui   # every scope. core: unit+integration;
+                                                     # ui: unit+integration+component;
+                                                     # electron: unit only; cli: integration only
 
 # Single test file: compile the whole project first, then run node --test on one compiled file
 node build/test.mjs core
 node --test .test-dist/core/test/unit/gateway/gateway-status.test.js
 
 npm run test:e2e            # Playwright, needs build:assets first; tests/e2e/
-npm run test:system         # Docker smoke test
+npm run test:e2e:install    # one-time: playwright install chromium
+npm run test:system         # Docker smoke test (alias: test:docker)
+npm run docker:build        # also docker:compose:build, docker:compose:up, docker:run
 npm run models:update       # regenerate packages/core/models.json from litellm/models.dev/openrouter
 npm run rebuild:sqlite3     # electron-rebuild better-sqlite3 after Electron version bumps
 ```
@@ -70,7 +74,9 @@ CCR does not serve model requests in-process. Flow:
 2. The supervisor (`gateway/core-runtime/supervisor.ts`) spawns the vendored gateway runtime - `@the-next-ai/ai-gateway`'s `bin/next-ai-gateway.js`, bundled to `dist/main/next-ai-gateway.js` - as a managed child process.
 3. The child runs the compiled `gateway/core-runtime/gateway-bootstrap.ts` first: it receives the compiled config over IPC, then monkey-patches `node:fs` so the gateway runtime "reads" a virtual config file from disk (`GATEWAY_CONFIG_PATH`). Writes/renames to managed config paths are blocked.
 4. Config changes restart or reload the child via `gateway/runtime-change.ts`; the old gateway is probed/stopped by `existing-gateway-probe.ts` so port conflicts are detected.
-5. Request handling in the child: `routing/` compiles router rules and evaluates them (policies in `routing/policy-engine.ts`, JS route scripts execute in a sandboxed worker `route-script-worker.ts`), then `gateway/upstream/executor.ts` sends to the provider with retry/fallback (`retry-policy.ts`).
+5. Request handling: `routing/` compiles router rules and evaluates them (policies in `routing/policy-engine.ts`, JS route scripts execute in a sandboxed worker `route-script-worker.ts`), then `gateway/upstream/executor.ts` sends to the provider with retry/fallback (`retry-policy.ts`).
+
+Which process runs what is easy to get wrong, and it matters when patching the request path. Agents connect to 3456, which is owned by the CCR process running `dist/main/cli.js`, not by the vendored child; the child owns 3457 only. The upstream fallback loop is bundled into `cli.js` alone. Confirm before assuming: `ss -ltnp | grep -E '3456|3457'` for ownership, and grep the installed `dist/main/*.js` for a symbol from the code being changed to find which bundle carries it.
 
 Other top-level core dirs worth knowing: `agents/` (per-agent integrations: claude-code, codex, claude-app, bot-gateway, kilo, opencode, pi, zcode, local-providers), `providers/` (presets, probing, credential pools, OAuth, account snapshots), `observability/` (request logs, SQLite-backed, body chunks served through a worker), `usage/` (token/cost stats), `mcp/` (MCP servers CCR exposes to agents), `plugins/` (wrapper + core gateway plugins, marketplace), `profiles/` (agent profiles and launching agents against the gateway), `contracts/app.ts` (shared types across all four packages), `web/management-server.ts` (HTTP API + static UI serving for CLI/Docker mode), `storage/sqlite-native.ts` (single better-sqlite3 instance boundary).
 
@@ -86,6 +92,10 @@ Rules live in `build/esbuild.config.mjs` and `tests/architecture/` and fail the 
 - Every workspace must keep its own `test/` dir and `test` script.
 
 When adding imports inside `core`, a new dependency edge can silently violate one of these; if a bundle size or forbidden-input error appears after an import change, this is why.
+
+## Test baseline
+
+`origin/main` does not pass its own core suite. Before attributing a core test failure to local work, reproduce it against pure upstream in a throwaway worktree (`git worktree add --detach <dir> origin/main`, symlink the root `node_modules`, then `node build/test.mjs core && node build/run-tests.mjs core`) and compare failure names. Attribute only the difference.
 
 ## Generated files
 
