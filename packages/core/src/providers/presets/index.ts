@@ -3,6 +3,7 @@ import { bailianProviderPreset } from "@ccr/core/providers/presets/bailian/index
 import { claudeApiProviderPreset } from "@ccr/core/providers/presets/claudeapi/index";
 import { code0ProviderPreset } from "@ccr/core/providers/presets/code0/index";
 import { deepSeekProviderPreset } from "@ccr/core/providers/presets/deepseek/index";
+import { electronHubProviderPreset } from "@ccr/core/providers/presets/electronhub/index";
 import { fennoProviderPreset } from "@ccr/core/providers/presets/fenno/index";
 import { geminiProviderPreset } from "@ccr/core/providers/presets/gemini/index";
 import { infistarAiProviderPreset } from "@ccr/core/providers/presets/infistar-ai/index";
@@ -48,6 +49,7 @@ export const providerPresets: ProviderPreset[] = [
   nvidiaProviderPreset,
   openCodeGoProviderPreset,
   deepSeekProviderPreset,
+  electronHubProviderPreset,
   xiaomiMimoProviderPreset,
   xiaomiMimoTokenPlanChinaProviderPreset,
   xiaomiMimoTokenPlanSingaporeProviderPreset,

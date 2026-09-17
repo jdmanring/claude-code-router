@@ -693,3 +693,17 @@ test("a value with no placeholder is left exactly as it was", () => {
   // An unknown placeholder must survive rather than becoming "undefined".
   assert.equal(applyAccountWindowTemplate("{{nope}}", 60, windowNow), "{{nope}}");
 });
+
+test("the Electron Hub preset resolves by base URL and carries a usage connector", () => {
+  const preset = findProviderPreset("electronhub");
+  assert.ok(preset, "the preset is registered");
+  assert.equal(preset.account?.enabled, true);
+  const connector = preset.account?.connectors?.[0];
+  // Every other path on that host answers with a Cloudflare challenge, so this
+  // endpoint comes from Electron Hub's own reference and must not drift.
+  assert.equal(connector?.endpoint, "https://api.electronhub.ai/v1/user/me");
+  assert.deepEqual(
+    connector?.mapping?.meters?.map((meter) => meter.id),
+    ["credits", "input_tokens", "output_tokens"]
+  );
+});
