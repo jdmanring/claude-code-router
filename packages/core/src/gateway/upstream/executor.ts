@@ -296,6 +296,17 @@ export async function fetchUpstreamWithFallback(input: {
   trace?: RouteTraceObserver;
   upstreamUrl: string;
 }): Promise<UpstreamFetchResult> {
+  // Gateway model discovery advertises every model as "<Provider>/<model>", and
+  // an agent hands that id straight back inside a tool definition that carries
+  // its own model, such as Claude Code's advisor tool. Only the top-level model
+  // is un-namespaced further down, so the provider prefix reaches the upstream
+  // and Anthropic rejects the whole request with "tools.<n>.model". Resolve
+  // those here, once, on behalf of every caller.
+  const bodyWithResolvedToolModels = resolveToolModelSelectors(input.body, input.config);
+  if (bodyWithResolvedToolModels !== input.body) {
+    releaseJsonObject(input.body);
+    input = { ...input, body: bodyWithResolvedToolModels };
+  }
   const fallbackMode = input.fallback.mode;
   const planningHeaders = { ...input.headers };
   const planningRouting = applyProviderCapabilityRouting({
@@ -1150,6 +1161,30 @@ function buildUpstreamAttempts(
   }));
 }
 
+
+// A tool's model must name a model the upstream itself knows. Only a prefix
+// that names a configured provider is stripped, because a model id may contain
+// a slash of its own, as in "moonshotai/kimi-k3".
+function resolveToolModelSelectors(body: Buffer | undefined, config: AppConfig): Buffer | undefined {
+  const parsedBody = parseJsonObjectSafe(body);
+  const tools = parsedBody?.tools;
+  if (!parsedBody || !Array.isArray(tools)) {
+    return body;
+  }
+  let changed = false;
+  const resolvedTools = tools.map((tool) => {
+    if (!isRecord(tool)) {
+      return tool;
+    }
+    const selector = parseProviderModelSelector(stringValue(tool.model));
+    if (!selector || !findProviderByPublicOrInternalName(config, selector.provider)) {
+      return tool;
+    }
+    changed = true;
+    return { ...tool, model: selector.model };
+  });
+  return changed ? serializeJsonBody({ ...parsedBody, tools: resolvedTools }) : body;
+}
 
 function buildAttemptBody(
   body: Buffer | undefined,

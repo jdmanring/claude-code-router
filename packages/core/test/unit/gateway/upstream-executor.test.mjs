@@ -967,3 +967,43 @@ test("a malformed-request status does not sideline the target", async () => {
   const second = await runChainRequest((n) => (n === 1 ? badRequest() : ok()));
   assert.deepEqual(second.addressed, ["model-a", "model-b"], "a 400 must not remove the primary");
 });
+
+test("a tool's provider-namespaced model is resolved before the request leaves", async () => {
+  const originalFetch = globalThis.fetch;
+  let sent;
+  globalThis.fetch = async (_url, init) => {
+    sent = JSON.parse(init.body);
+    return new Response('{"ok":true}', { status: 200 });
+  };
+  const requestBody = {
+    messages: [],
+    model: "Primary/model-a",
+    tools: [
+      // Claude Code echoes back the id gateway model discovery gave it.
+      { model: "Primary/model-a", name: "advisor", type: "advisor_20260301" },
+      // A model id may contain a slash that is not a provider prefix.
+      { model: "moonshotai/kimi-k3", name: "delegate", type: "custom" },
+      { input_schema: { type: "object" }, name: "Read" }
+    ]
+  };
+  try {
+    await fetchUpstreamWithFallback({
+      body: Buffer.from(JSON.stringify(requestBody)),
+      config: cooldownConfig,
+      coreAuthToken: "core-token",
+      fallback: { mode: "off", models: [], retryCount: 0 },
+      headers: {},
+      method: "POST",
+      path: "/v1/messages",
+      routedModel: "Primary/model-a",
+      upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(sent.tools[0].model, "model-a", "the configured provider prefix is stripped");
+  assert.equal(sent.tools[1].model, "moonshotai/kimi-k3", "a slash that is not a provider prefix is left alone");
+  assert.equal(sent.tools[2].name, "Read", "a tool without a model is untouched");
+  assert.equal(sent.tools[0].type, "advisor_20260301", "the rest of the tool definition survives");
+});
