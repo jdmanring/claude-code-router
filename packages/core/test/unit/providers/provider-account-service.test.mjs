@@ -16,8 +16,7 @@ import {
   grokDefaultSubscriptionEndpoint,
   grokProviderAccountConfig
 } from "@ccr/core/agents/local-providers/grok.ts";
-import { findProviderPreset, findProviderPresetByBaseUrl } from "@ccr/core/providers/presets/index.ts";
-import { communityProviderPresets } from "@ccr/core/providers/presets/community/index.ts";
+import { findProviderPreset, findProviderPresetByBaseUrl, providerPresets } from "@ccr/core/providers/presets/index.ts";
 
 const localAgentProviderApiKey = "ccr-local-agent-login";
 const codexDefaultBaseUrl = "https://chatgpt.com/backend-api/codex";
@@ -718,10 +717,17 @@ test("community presets register without disturbing the dedicated ones", () => {
   assert.notEqual(zen.id, go.id, "the two must not collapse into one preset");
   assert.equal(go.id, "opencode-go");
 
-  // An imported provider must hold no account config rather than an empty one.
-  for (const preset of communityProviderPresets) {
-    assert.equal(preset.account, undefined, `${preset.id} carries no account config`);
+  // Every preset needs an endpoint and an alias, and one that serves no usage
+  // endpoint must carry no account config at all: an imported provider would
+  // otherwise hold an empty object where callers expect nothing.
+  for (const preset of providerPresets) {
     assert.ok(preset.endpoints.length > 0, `${preset.id} has an endpoint`);
     assert.ok(preset.aliases.length > 0, `${preset.id} has an alias`);
+    if (preset.account) {
+      assert.ok(
+        preset.account.enabled === false || (preset.account.connectors ?? []).length > 0,
+        `${preset.id} either ships connectors or is disabled`
+      );
+    }
   }
 });
