@@ -18,7 +18,8 @@ import { parseJsonObjectSafe, releaseJsonObject, serializeJsonBody, serializeJso
 import { resolveGatewayPublicModelId } from "@ccr/core/gateway/features/model-discovery";
 import { activeProviderCredentials, findProviderByPublicOrInternalName, findProviderCredentialBySlug, normalizedProviderCapabilities, parseProviderCredentialInternalName, providerCapabilityForClientProtocol, providerCapabilityInternalName, providerCapabilityNameMatches, providerCredentialInternalName, providerCredentialPriority, providerCredentialRuntimeId, providerCredentialSlug, providerProtocolForClientProtocol, sanitizeHeaderValue } from "@ccr/core/providers/runtime-topology";
 import { delay } from "@ccr/core/gateway/internal/clock";
-import { retryDelayAfterNetworkError, retryDelayAfterStatus, shouldFallbackAfterStatus } from "@ccr/core/gateway/upstream/retry-policy";
+import { cooldownAfterStatus, retryDelayAfterNetworkError, retryDelayAfterStatus, shouldFallbackAfterStatus } from "@ccr/core/gateway/upstream/retry-policy";
+import { clearTargetCooldown, markTargetCoolingDown, targetCooldownRemainingMs } from "@ccr/core/gateway/upstream/target-cooldown";
 import { ccrRoutedModelHeader } from "@ccr/core/gateway/core-runtime/router-plugin-contract";
 import { claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta, UpstreamRequestError } from "@ccr/core/gateway/internal/shared";
 import type { ApiKeyLimitUsage, ProviderCredentialRoutingTarget, UpstreamAttempt, UpstreamFailedAttempt, UpstreamFetchResult } from "@ccr/core/gateway/internal/shared";
@@ -369,6 +370,26 @@ export async function fetchUpstreamWithFallback(input: {
 
     const attemptNumber = index + 1;
     const plannedAttempt = attempts[index];
+    // A target that just answered 429 or 402 answers the same way until its
+    // window rolls over, so spending an attempt on it only burns the chain.
+    // The last entry is always attempted: a request must try something rather
+    // than fail having tried nothing.
+    const cooldownRemainingMs = targetCooldownRemainingMs(plannedAttempt.model);
+    if (cooldownRemainingMs > 0 && index < attempts.length - 1) {
+      const skippedAt = Date.now();
+      input.trace?.capture({
+        attempt: attemptNumber,
+        durationMs: 0,
+        kind: "outcome",
+        name: "upstream.attempt.skipped",
+        outcome: { cooldownRemainingMs, fallbackReason: "target-cooling-down" },
+        phase: "outcome",
+        startedAtMs: skippedAt,
+        status: "error",
+        target: plannedAttempt.model ? { model: plannedAttempt.model } : undefined
+      });
+      continue;
+    }
     const capabilityRoutingStartedAt = Date.now();
     let cachedAttemptRouting = attemptRoutingCache.get(plannedAttempt.model);
     if (!cachedAttemptRouting) {
@@ -544,6 +565,7 @@ export async function fetchUpstreamWithFallback(input: {
           statusCode: response.status
         });
         recordProviderCredentialOutcome(input.config, input.method, attempt, response.status, response.headers);
+        markTargetCoolingDown(plannedAttempt.model, cooldownAfterStatus(response.headers, response.status));
         // Failed response bodies may never finish. Start cancellation without
         // waiting for upstream cleanup before trying the next provider.
         void cancelResponseBody(response);
@@ -567,6 +589,10 @@ export async function fetchUpstreamWithFallback(input: {
           ...(attemptProvider ? { provider: attemptProvider } : {})
         }
       });
+
+      if (response.ok) {
+        clearTargetCooldown(plannedAttempt.model);
+      }
 
       return {
         attempt,

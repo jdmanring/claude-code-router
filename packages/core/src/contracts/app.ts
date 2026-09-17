@@ -2155,6 +2155,7 @@ export type RequestRouteTraceTarget = {
 };
 
 export type RequestRouteTraceOutcome = {
+  cooldownRemainingMs?: number;
   error?: string;
   fallbackReason?: string;
   retryDelayMs?: number;

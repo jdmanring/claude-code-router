@@ -18,6 +18,18 @@ export function retryDelayAfterStatus(headers: Headers, failedAttemptIndex: numb
   return exponentialRetryBackoffMs(failedAttemptIndex);
 }
 
+// 429 and 402 describe the target's state, not this request's: the same target
+// will answer the same way until its window rolls over or the account is
+// funded. Other statuses are request-shaped and must not sideline a provider.
+const targetCooldownStatuses = new Set([402, 429]);
+const defaultTargetCooldownMs = 60_000;
+
+export function cooldownAfterStatus(headers: Headers, statusCode: number): number {
+  if (!targetCooldownStatuses.has(statusCode)) return 0;
+  const retryAfterMs = parseRetryAfterHeaderMs(headers.get("retry-after"));
+  return retryAfterMs !== undefined && retryAfterMs > 0 ? retryAfterMs : defaultTargetCooldownMs;
+}
+
 export function retryDelayAfterNetworkError(failedAttemptIndex: number): number {
   return exponentialRetryBackoffMs(failedAttemptIndex);
 }

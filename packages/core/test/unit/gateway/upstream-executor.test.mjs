@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { beforeEach } from "node:test";
 import { buildClaudeAppGatewayModelRoutes } from "@ccr/core/agents/claude-app/gateway-routes.ts";
 import { prepareClaudeAppDiscoveredModelRequest } from "@ccr/core/gateway/features/model-discovery.ts";
 import { fetchUpstreamWithFallback, prepareGatewayUpstreamAttemptForTest } from "@ccr/core/gateway/upstream/executor.ts";
+import { resetTargetCooldownsForTest } from "@ccr/core/gateway/upstream/target-cooldown.ts";
+
+// The target cooldown store is module state, so a 429 in one test would
+// otherwise sideline that target for every test declared after it.
+beforeEach(resetTargetCooldownsForTest);
 import { RequestRouteTraceRecorder } from "@ccr/core/observability/route-trace.ts";
 
 const retryConfig = {
@@ -872,4 +877,93 @@ test("detectStreamErrors=false forwards the error frame verbatim", async () => {
   assert.equal(captured.length, 1, "detection is opt-out; no fallback attempt may be made");
   assert.equal(result.response.status, 200);
   assert.equal(await result.response.text(), providerErrorFrame);
+});
+
+const cooldownConfig = {
+  Providers: [
+    {
+      capabilities: [{ baseUrl: "https://primary.example", type: "anthropic_messages" }],
+      id: "primary",
+      models: ["model-a"],
+      name: "Primary"
+    },
+    {
+      capabilities: [{ baseUrl: "https://secondary.example", type: "anthropic_messages" }],
+      id: "secondary",
+      models: ["model-b"],
+      name: "Secondary"
+    }
+  ],
+  Router: { fallback: { mode: "off", models: [], retryCount: 0 }, rules: [] },
+  virtualModelProfiles: []
+};
+const cooldownFallback = { mode: "model-chain", models: ["Secondary/model-b"], retryCount: 0 };
+
+// Drives one request through the chain, reporting the model each attempt was
+// actually addressed to. Counting fetches cannot tell "the primary was skipped"
+// apart from "the primary answered", so the sequence is what matters.
+async function runChainRequest(respond) {
+  const originalFetch = globalThis.fetch;
+  const addressed = [];
+  globalThis.fetch = async (_url, init) => {
+    addressed.push(JSON.parse(init.body).model);
+    return respond(addressed.length);
+  };
+  try {
+    const result = await fetchUpstreamWithFallback({
+      body: Buffer.from('{"messages":[],"model":"Primary/model-a"}'),
+      config: cooldownConfig,
+      coreAuthToken: "core-token",
+      fallback: cooldownFallback,
+      headers: {},
+      method: "POST",
+      path: "/v1/messages",
+      routedModel: "Primary/model-a",
+      upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+    });
+    return { addressed, status: result.response.status };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+const rateLimited = () => new Response("{}", { headers: { "retry-after": "60" }, status: 429 });
+const ok = () => new Response('{"ok":true}', { status: 200 });
+
+test("a rate-limited target is skipped on the next request instead of being tried again", async () => {
+  const first = await runChainRequest((n) => (n === 1 ? rateLimited() : ok()));
+  assert.equal(first.status, 200);
+  assert.deepEqual(first.addressed, ["model-a", "model-b"]);
+
+  const second = await runChainRequest(() => ok());
+  assert.equal(second.status, 200);
+  // Without a cooldown the chain would start at model-a again.
+  assert.deepEqual(second.addressed, ["model-b"], "the exhausted primary is not addressed again");
+});
+
+test("the last chain entry is attempted even while it is cooling down", async () => {
+  const first = await runChainRequest(() => rateLimited());
+  assert.equal(first.status, 429);
+  assert.deepEqual(first.addressed, ["model-a", "model-b"]);
+
+  // Both entries are cooling, but a request must still try something.
+  const second = await runChainRequest(() => rateLimited());
+  assert.deepEqual(second.addressed, ["model-b"]);
+});
+
+test("a success on one target does not clear a different target's cooldown", async () => {
+  await runChainRequest((n) => (n === 1 ? rateLimited() : ok()));
+  // The secondary answered 200; that must not put the primary back in rotation.
+  const next = await runChainRequest(() => ok());
+  assert.deepEqual(next.addressed, ["model-b"]);
+});
+
+test("a malformed-request status does not sideline the target", async () => {
+  const badRequest = () => new Response("{}", { status: 400 });
+  const first = await runChainRequest((n) => (n === 1 ? badRequest() : ok()));
+  assert.deepEqual(first.addressed, ["model-a", "model-b"]);
+
+  // 400 describes the request, not the provider, so the primary stays in the chain.
+  const second = await runChainRequest((n) => (n === 1 ? badRequest() : ok()));
+  assert.deepEqual(second.addressed, ["model-a", "model-b"], "a 400 must not remove the primary");
 });
