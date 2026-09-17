@@ -10,7 +10,12 @@ import { modelRegistryForConfig, normalizeRouteSelector, parseProviderModelSelec
 import { requestProtocolForPath } from "@ccr/core/routing/protocol-endpoints";
 import { resolveConfiguredProviderModelSelector, resolveUniqueConfiguredProviderModelSelector } from "@ccr/core/routing/model-resolution";
 import { estimateLimitUsage } from "@ccr/core/gateway/limits/window-limiter";
-import { providerCredentialLimitState, readProviderCredentialCooldown, recordProviderCredentialOutcome } from "@ccr/core/providers/credential-pool";
+import {
+  providerCredentialLimitState,
+  providerCredentialsAllCooling,
+  readProviderCredentialCooldown,
+  recordProviderCredentialOutcome
+} from "@ccr/core/providers/credential-pool";
 import { isRecord, stringValue } from "@ccr/core/gateway/internal/value";
 import { isLocalClaudeCodeOauthProviderPlugin, mergeAnthropicBetaValues } from "@ccr/core/providers/oauth-plugin";
 import { abortSignalMessage, formatError, omitLocalObservabilityHeaders, shouldSendBody, withCoreGatewayAuthHeader } from "@ccr/core/gateway/http/io";
@@ -305,7 +310,7 @@ export async function fetchUpstreamWithFallback(input: {
     path: input.path,
     routedModel: input.routedModel
   });
-  const attempts = buildUpstreamAttempts(
+  const plannedAttempts = buildUpstreamAttempts(
     input.config,
     planningRouting.fallback,
     input.method,
@@ -313,6 +318,11 @@ export async function fetchUpstreamWithFallback(input: {
     planningRouting.body,
     planningRouting.routedModel
   );
+  // planningRouting.body was computed for the originally routed model, so the
+  // primary attempt is captured before the chain is reordered; the routing
+  // cache is keyed by model and still hits wherever that attempt ends up.
+  const primaryAttempt = plannedAttempts[0];
+  const attempts = deprioritizeCoolingAttempts(plannedAttempts);
   // rewriteFallbackForProtocol maps the configured chain index for index, so
   // these two lists pair each internal capability selector with the selector
   // the user actually configured. The core gateway resolves a request's target
@@ -334,7 +344,6 @@ export async function fetchUpstreamWithFallback(input: {
     sourceBody?: Buffer;
     sourceRoutedModel?: string;
   }>();
-  const primaryAttempt = attempts[0];
   const parsedInputBody = parseJsonObjectSafe(input.body);
   const planningBodyCanSeedPrimary = requestProtocolForPath(input.path) === "gemini_generate_content" ||
     !parsedInputBody ||
@@ -1097,6 +1106,24 @@ function sortProviderCredentialCandidates<T extends {
   }
 
   return prioritySorted;
+}
+
+
+// A model whose every credential is cooling would burn an attempt slot and a
+// round trip before failing again. Move it behind the attempts that can still
+// answer, without dropping it: when the whole chain is cooling the original
+// order stands and everything is still tried.
+function deprioritizeCoolingAttempts(attempts: UpstreamAttempt[]): UpstreamAttempt[] {
+  const cooling = attempts.filter(attemptIsCooling);
+  return cooling.length === 0 || cooling.length === attempts.length
+    ? attempts
+    : [...attempts.filter((attempt) => !cooling.includes(attempt)), ...cooling];
+}
+
+
+function attemptIsCooling(attempt: UpstreamAttempt): boolean {
+  const provider = attempt.target?.kind === "provider" ? attempt.target.provider : undefined;
+  return provider ? providerCredentialsAllCooling(provider, activeProviderCredentials(provider)) : false;
 }
 
 

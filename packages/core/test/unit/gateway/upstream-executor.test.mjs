@@ -4,6 +4,11 @@ import { buildClaudeAppGatewayModelRoutes } from "@ccr/core/agents/claude-app/ga
 import { prepareClaudeAppDiscoveredModelRequest } from "@ccr/core/gateway/features/model-discovery.ts";
 import { fetchUpstreamWithFallback, prepareGatewayUpstreamAttemptForTest } from "@ccr/core/gateway/upstream/executor.ts";
 import { RequestRouteTraceRecorder } from "@ccr/core/observability/route-trace.ts";
+import {
+  providerCredentialsAllCooling,
+  recordProviderCredentialOutcome
+} from "@ccr/core/providers/credential-pool.ts";
+import { providerCredentialInternalName } from "@ccr/core/providers/runtime-topology.ts";
 
 const retryConfig = {
   Providers: [],
@@ -872,4 +877,70 @@ test("detectStreamErrors=false forwards the error frame verbatim", async () => {
   assert.equal(captured.length, 1, "detection is opt-out; no fallback attempt may be made");
   assert.equal(result.response.status, 200);
   assert.equal(await result.response.text(), providerErrorFrame);
+});
+
+test("a model whose every credential is cooling moves to the back of the chain", async () => {
+  const primary = {
+    capabilities: [{ baseUrl: "https://primary.example", type: "anthropic_messages" }],
+    credentials: [{ apiKey: "primary-key", id: "primary-cred" }],
+    id: "primary",
+    models: ["model-a"],
+    name: "Cooling Primary"
+  };
+  const secondary = {
+    capabilities: [{ baseUrl: "https://secondary.example", type: "anthropic_messages" }],
+    credentials: [{ apiKey: "secondary-key", id: "secondary-cred" }],
+    id: "secondary",
+    models: ["model-b"],
+    name: "Warm Secondary"
+  };
+  const config = {
+    Providers: [primary, secondary],
+    Router: { fallback: { mode: "off", models: [], retryCount: 0 }, rules: [] },
+    virtualModelProfiles: []
+  };
+
+  // The primary's only credential is out of quota for the next hour.
+  recordProviderCredentialOutcome(
+    config,
+    "POST",
+    {
+      credentialChain: [providerCredentialInternalName(primary, "anthropic_messages", primary.credentials[0])],
+      credentialProtocol: "anthropic_messages",
+      logicalProvider: primary.name
+    },
+    429,
+    new Headers({ "retry-after": "3600" })
+  );
+  assert.equal(providerCredentialsAllCooling(primary, primary.credentials), true);
+
+  const originalFetch = globalThis.fetch;
+  const routedModelHeaders = [];
+  globalThis.fetch = async (_url, init) => {
+    routedModelHeaders.push(init?.headers?.["x-ccr-routed-model"]);
+    return new Response("{}", { status: 429 });
+  };
+
+  try {
+    await fetchUpstreamWithFallback({
+      body: Buffer.from('{"messages":[],"model":"Cooling Primary/model-a"}'),
+      config,
+      coreAuthToken: "core-token",
+      fallback: { mode: "model-chain", models: ["Warm Secondary/model-b"], retryCount: 0 },
+      headers: { "x-ccr-routed-model": "Cooling Primary/model-a" },
+      method: "POST",
+      path: "/v1/messages",
+      routedModel: "Cooling Primary/model-a",
+      upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+    });
+  } catch {
+    // Every attempt fails here; the order of the attempts is what is under test.
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Deprioritised, not dropped: the cooling model is still tried last.
+  assert.equal(routedModelHeaders.length, 2);
+  assert.match(routedModelHeaders[0], /model-b$/);
+  assert.match(routedModelHeaders[1], /model-a$/);
 });

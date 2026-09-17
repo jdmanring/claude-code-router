@@ -38,7 +38,7 @@ export function fallbackRetryDelayAfterNetworkErrorForTest(failedAttemptIndex = 
   return retryDelayAfterNetworkError(failedAttemptIndex);
 }
 
-function parseRetryAfterHeaderMs(value: string | null): number | undefined {
+export function parseRetryAfterHeaderMs(value: string | null): number | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
   const seconds = Number(trimmed);

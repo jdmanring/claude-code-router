@@ -1,5 +1,6 @@
 import type { AppConfig, GatewayProviderConfig, ProviderCredentialConfig } from "@ccr/core/contracts/app";
 import { estimateLimitUsage, limitRules, readWindowCounter } from "@ccr/core/gateway/limits/window-limiter";
+import { parseRetryAfterHeaderMs } from "@ccr/core/gateway/upstream/retry-policy";
 import {
   type ApiKeyLimitRule,
   type ApiKeyLimitUsage,
@@ -14,6 +15,12 @@ import {
 } from "@ccr/core/providers/runtime-topology";
 
 const providerCredentialCooldownMs = 60_000;
+// A daily quota reports its reset through retry-after, often hours away.
+// Honour it instead of re-hitting an exhausted credential every minute, but
+// cap it so a malformed header cannot retire a credential for good.
+const providerCredentialCooldownMaxMs = 6 * 60 * 60 * 1000;
+// ponytail: cooldowns live in this module-global map, so a gateway restart
+// forgets them; persist to storage if restarts start costing real quota.
 const providerCredentialCooldowns = new Map<string, { reason: string; until: number }>();
 
 export function providerCredentialLimitState(
@@ -60,7 +67,7 @@ export function recordProviderCredentialOutcome(
     return;
   }
   if (statusCode === 401 || statusCode === 403 || statusCode === 429 || statusCode >= 500) {
-    setProviderCredentialCooldown(provider, credential, providerCredentialCooldownMs, `HTTP ${statusCode}`);
+    setProviderCredentialCooldown(provider, credential, cooldownMsForResponse(responseHeaders), `HTTP ${statusCode}`);
   }
 }
 
@@ -74,6 +81,21 @@ export function readProviderCredentialCooldown(
   if (cooldown.until > Date.now()) return cooldown;
   providerCredentialCooldowns.delete(key);
   return undefined;
+}
+
+export function providerCredentialsAllCooling(
+  provider: GatewayProviderConfig,
+  credentials: readonly ProviderCredentialConfig[]
+): boolean {
+  return credentials.length > 0 &&
+    credentials.every((credential) => readProviderCredentialCooldown(provider, credential) !== undefined);
+}
+
+function cooldownMsForResponse(responseHeaders: Headers): number {
+  const retryAfterMs = parseRetryAfterHeaderMs(responseHeaders.get("retry-after"));
+  return retryAfterMs !== undefined && retryAfterMs > providerCredentialCooldownMs
+    ? Math.min(retryAfterMs, providerCredentialCooldownMaxMs)
+    : providerCredentialCooldownMs;
 }
 
 function providerCredentialFromInternalName(provider: GatewayProviderConfig, internalName: string | undefined): ProviderCredentialConfig | undefined {
