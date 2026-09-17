@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
+  applyAccountWindowTemplate,
   localAgentProviderAccountCredentialForTest,
   localCodexAccountCredentialForTest,
   setProviderAccountWebContentFetchHandler,
@@ -656,3 +657,39 @@ function jwt(payload) {
 function base64url(value) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
+
+// 2026-09-16T12:00:00Z, so the expected values below are readable.
+const windowNow = 1789560000000;
+
+test("a rolling window endpoint is addressed to the requested span", () => {
+  const endpoint = applyAccountWindowTemplate(
+    "https://api.example/usage?start_time={{start_time}}&end_time={{end_time}}",
+    3600,
+    windowNow
+  );
+  assert.equal(endpoint, "https://api.example/usage?start_time=1789556400&end_time=1789560000");
+});
+
+test("a rolling window defaults to thirty days when no span is configured", () => {
+  const endpoint = applyAccountWindowTemplate("https://api.example/u?s={{start_time}}", undefined, windowNow);
+  assert.equal(endpoint, `https://api.example/u?s=${1789560000 - 30 * 24 * 60 * 60}`);
+});
+
+test("rolling window placeholders reach nested request body values", () => {
+  const body = applyAccountWindowTemplate(
+    { filters: [{ from: "{{start_iso}}" }], range: { to: "{{end_time_ms}}" }, untouched: 7 },
+    60,
+    windowNow
+  );
+  assert.equal(body.range.to, "1789560000000");
+  assert.equal(body.filters[0].from, "2026-09-16T11:59:00.000Z");
+  assert.equal(body.untouched, 7, "non-string values are carried through unchanged");
+});
+
+test("a value with no placeholder is left exactly as it was", () => {
+  const endpoint = "https://api.example/v1/admin/spend-limit";
+  assert.equal(applyAccountWindowTemplate(endpoint, 60, windowNow), endpoint);
+  assert.equal(applyAccountWindowTemplate(undefined, 60, windowNow), undefined);
+  // An unknown placeholder must survive rather than becoming "undefined".
+  assert.equal(applyAccountWindowTemplate("{{nope}}", 60, windowNow), "{{nope}}");
+});

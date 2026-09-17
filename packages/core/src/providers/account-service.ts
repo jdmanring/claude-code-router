@@ -108,6 +108,7 @@ const maxErrorRefreshIntervalMs = 60 * 1000;
 const maxStaleAccountSnapshotMs = 2 * 60 * 1000;
 const maxCacheEntries = 500;
 const standardAccountPaths = ["/.well-known/ccr/account", "/v1/account/limits"];
+const defaultAccountWindowSeconds = 30 * 24 * 60 * 60;
 const codexRateLimitResetCreditConsumeEndpoint = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume";
 const codexOauthTokenEndpoint = "https://auth.openai.com/oauth/token";
 const codexOauthClientId = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -180,7 +181,14 @@ export async function testProviderAccountConnector(request: ProviderAccountTestR
   const connector = normalizeProviderAccountTestConnector(request.connector);
   const payload = connector.type === "webcontent-json"
     ? await fetchWebContentJson(provider, connector)
-    : await fetchJson(connector.endpoint, provider, connector.auth, connector.headers, connector.method, connector.body);
+    : await fetchJson(
+      applyAccountWindowTemplate(connector.endpoint, connector.windowSeconds),
+      provider,
+      connector.auth,
+      connector.headers,
+      connector.method,
+      applyAccountWindowTemplate(connector.body, connector.windowSeconds)
+    );
   const source = connector.type;
   if (connector.parser === "grok-subscription") {
     const meters = grokSubscriptionMeters(payload, source);
@@ -696,10 +704,18 @@ async function resolveHttpJsonConnector(
   const request = providerAccountConnectorUsesProviderApiKey(connector)
     ? await materializeProviderAccountRequest(config, provider)
     : { provider };
-  const payload = await fetchJson(connector.endpoint, request.provider, connector.auth, {
-    ...(connector.headers ?? {}),
-    ...(request.headers ?? {})
-  }, connector.method, connector.body);
+  const windowNow = Date.now();
+  const payload = await fetchJson(
+    applyAccountWindowTemplate(connector.endpoint, connector.windowSeconds, windowNow),
+    request.provider,
+    connector.auth,
+    {
+      ...(connector.headers ?? {}),
+      ...(request.headers ?? {})
+    },
+    connector.method,
+    applyAccountWindowTemplate(connector.body, connector.windowSeconds, windowNow)
+  );
   if (connector.parser === "grok-subscription") {
     return {
       errors: [],
@@ -1967,6 +1983,39 @@ function providerWithoutApiKey(provider: GatewayProviderConfig): GatewayProvider
     apiKey: undefined,
     apikey: undefined
   };
+}
+
+/**
+ * Some usage APIs report over a caller-supplied window rather than a running
+ * total, so a static endpoint cannot address them. Substitutes the rolling
+ * window placeholders in an endpoint or request body. A value carrying no
+ * placeholder is returned untouched.
+ */
+export function applyAccountWindowTemplate<T>(value: T, windowSeconds?: number, now: number = Date.now()): T {
+  const endSeconds = Math.floor(now / 1000);
+  const span = Number.isFinite(windowSeconds) && (windowSeconds ?? 0) > 0
+    ? Math.floor(windowSeconds as number)
+    : defaultAccountWindowSeconds;
+  const startSeconds = endSeconds - span;
+  const replacements: Record<string, string> = {
+    end_iso: new Date(endSeconds * 1000).toISOString(),
+    end_time: String(endSeconds),
+    end_time_ms: String(endSeconds * 1000),
+    start_iso: new Date(startSeconds * 1000).toISOString(),
+    start_time: String(startSeconds),
+    start_time_ms: String(startSeconds * 1000)
+  };
+  const substitute = (input: string): string =>
+    input.replace(/\{\{\s*([A-Za-z_]+)\s*\}\}/g, (match, key: string) => replacements[key.toLowerCase()] ?? match);
+  const walk = (input: unknown): unknown => {
+    if (typeof input === "string") return substitute(input);
+    if (Array.isArray(input)) return input.map(walk);
+    if (input && typeof input === "object") {
+      return Object.fromEntries(Object.entries(input as Record<string, unknown>).map(([k, v]) => [k, walk(v)]));
+    }
+    return input;
+  };
+  return walk(value) as T;
 }
 
 async function fetchJson(

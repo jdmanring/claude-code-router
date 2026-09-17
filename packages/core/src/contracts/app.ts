@@ -311,6 +311,11 @@ export type ProviderAccountHttpJsonConnectorConfig = ProviderAccountConnectorBas
   method?: "GET" | "POST";
   parser?: ProviderAccountHttpJsonParser;
   type: "http-json";
+  /**
+   * Length of the rolling window offered to the {{start_time}} family of
+   * placeholders in `endpoint` and `body`. Defaults to 30 days.
+   */
+  windowSeconds?: number;
 };
 
 export type ProviderAccountWebContentJsonConnectorConfig = ProviderAccountConnectorBaseConfig & {
