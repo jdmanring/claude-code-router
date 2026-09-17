@@ -633,3 +633,61 @@ test("model-chain fallback moves to a different model without waiting out the fa
     globalThis.setTimeout = originalSetTimeout;
   }
 });
+
+test("model-chain fallback re-addresses each attempt instead of repeating the failed provider", async () => {
+  const config = {
+    Providers: [
+      {
+        capabilities: [{ baseUrl: "https://primary.example", type: "anthropic_messages" }],
+        id: "primary",
+        models: ["model-a"],
+        name: "Primary"
+      },
+      {
+        capabilities: [{ baseUrl: "https://secondary.example", type: "anthropic_messages" }],
+        id: "secondary",
+        models: ["model-b"],
+        name: "Secondary"
+      }
+    ],
+    Router: { fallback: { mode: "off", models: [], retryCount: 0 }, rules: [] },
+    virtualModelProfiles: []
+  };
+  const originalFetch = globalThis.fetch;
+  const routedModelHeaders = [];
+  let fetchCount = 0;
+
+  globalThis.fetch = async (_url, init) => {
+    fetchCount += 1;
+    routedModelHeaders.push(init?.headers?.["x-ccr-routed-model"]);
+    // The primary is rate limited, so only the second attempt may succeed.
+    return fetchCount === 1
+      ? new Response("{}", { status: 429 })
+      : new Response('{"ok":true}', { status: 200 });
+  };
+
+  try {
+    const result = await fetchUpstreamWithFallback({
+      body: Buffer.from('{"messages":[],"model":"Primary/model-a"}'),
+      config,
+      coreAuthToken: "core-token",
+      fallback: { mode: "model-chain", models: ["Secondary/model-b"], retryCount: 0 },
+      // The request pipeline stamps this header once, from the primary model.
+      headers: { "x-ccr-routed-model": "Primary/model-a" },
+      method: "POST",
+      path: "/v1/messages",
+      routedModel: "Primary/model-a",
+      upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+    });
+
+    assert.equal(result.response.status, 200);
+    assert.equal(fetchCount, 2);
+    // The core gateway resolves the provider from this header before it reads
+    // the body, so a stale primary value sends the fallback attempt straight
+    // back to the provider that just returned 429.
+    assert.match(routedModelHeaders[0], /model-a$/);
+    assert.match(routedModelHeaders[1], /model-b$/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
