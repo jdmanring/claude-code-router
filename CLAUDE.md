@@ -219,6 +219,22 @@ default chain on every call.
 Read the chain a slot actually reaches with `node scripts/config-audit.mjs
 --show` rather than assuming; the slots are config, not code.
 
+## Provider triage
+
+**OVH is anonymous access and takes no API key.** Its empty `api_key` is correct
+and is not the cause of any failure; its 429 is the shared anonymous rate limit,
+which a probe sweep exhausts on its own. Do not go looking for a credential.
+
+Every provider failure repaired here came down to one of four causes, cheapest
+first: a stale model id, a wrong or duplicated base URL (two capabilities of the
+same type, first one wins), the gateway truncating a colliding model id, or an
+account out of quota. Read the provider's message rather than its status code:
+the same 403 covers "free quota exhausted for this model family" and "this
+account has no balance", and a 503 can carry `model_not_found`. Probe the
+provider directly with the same key, model and body before touching config, and
+use at least 16 `max_tokens`, because some providers reject less and that
+manufactures a failure that is not there.
+
 ## Config drift
 
 A config save replaces the whole stored blob and nothing checks it against the
