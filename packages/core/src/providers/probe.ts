@@ -1851,7 +1851,17 @@ function isProtocolSupported(
 
   if (status === 400 || status === 422) {
     const normalized = message.toLowerCase();
+    // A 400 normally means the route exists and rejected this particular probe
+    // body, which is evidence the protocol is served. It is not evidence when
+    // the provider is saying it cannot serve the request at all: an aggregator
+    // that exposes every protocol path but routes only some of them answers
+    // here, and recording the capability sends real traffic to a route that
+    // always fails. The router prefers a capability matching the inbound
+    // protocol, so one false positive is enough to break the provider.
     if (/not found|unknown endpoint|unknown route|no route/.test(normalized)) {
+      return false;
+    }
+    if (/no available model provider|not supported|unsupported|no provider/.test(normalized)) {
       return false;
     }
     return true;
