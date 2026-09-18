@@ -392,6 +392,36 @@ function applyClaudeDesignProfile(profile: ProfileConfig, appliedAt: string): Pr
   };
 }
 
+// A generated Claude Code profile gets its own CLAUDE_CONFIG_DIR so that CCR can
+// own settings.json, .claude.json and the MCP config without touching the user's
+// real ones. That isolation is deliberate, but it is scoped to configuration:
+// everything else Claude Code reads from the config directory is user-owned
+// content that a profile has no reason to hide.
+//
+// Without these links a profile session runs with none of the user's skills,
+// agents or commands, and registers in a session directory of its own, so it
+// cannot discover or message any session outside the profile. The Kimi and Grok
+// profile homes already link the same class of entries; this is the Claude Code
+// equivalent.
+//
+// `plugins` is deliberately not linked. A Claude Code plugin can register
+// blocking hooks and MCP servers, so adopting one is a permissions decision
+// rather than a content one, and a profile should not make it silently.
+function linkClaudeCodeProfileSharedEntries(profile: ProfileConfig): void {
+  if (!isGeneratedProfileScope(profile.scope)) {
+    return;
+  }
+  const profileHome = path.dirname(resolveClaudeCodeSettingsFile(profile));
+  const sourceHome = resolveUserPath("~/.claude");
+  if (path.resolve(sourceHome) === path.resolve(profileHome)) {
+    return;
+  }
+  mkdirSync(profileHome, { mode: privateDirMode, recursive: true });
+  for (const entry of ["agents", "commands", "sessions", "skills"]) {
+    linkProfileHomeEntry(path.join(sourceHome, entry), path.join(profileHome, entry));
+  }
+}
+
 function applyClaudeCodeProfile(config: AppConfig, profile: ProfileConfig, token: string, appliedAt: string): ProfileClientApplyStatus {
   const settingsFile = resolveClaudeCodeSettingsFile(profile);
   if (!profile.enabled) {
@@ -400,6 +430,7 @@ function applyClaudeCodeProfile(config: AppConfig, profile: ProfileConfig, token
   }
 
   try {
+    linkClaudeCodeProfileSharedEntries(profile);
     if (claudeProfileModelDiscoveryChanged(config, profile)) {
       invalidateClaudeCodeGatewayModelCache(settingsFile);
       invalidateClaudeAppModelDiscoveryCache(profile);
