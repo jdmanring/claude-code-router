@@ -30,9 +30,12 @@ npm run test:integration -w @claude-code-router/ui   # every scope. core: unit+i
                                                      # ui: unit+integration+component;
                                                      # electron: unit only; cli: integration only
 
-# Single test file: compile the whole project first, then run node --test on one compiled file
+# Single test file: compile the whole project first, then run node --test on one compiled file.
+# node --test applies NO isolation - see the warning below before running one that writes config.
 node build/test.mjs core
-node --test .test-dist/core/test/unit/gateway/gateway-status.test.js
+CCR_INTERNAL_HOME_DIR=$(mktemp -d) HOME=$CCR_INTERNAL_HOME_DIR \
+  node --test .test-dist/core/test/unit/gateway/gateway-status.test.js
+# Direct node --test bypasses run-tests.mjs home/env isolation; use a throwaway env when needed.
 
 npm run test:e2e            # Playwright, needs build:assets first; tests/e2e/
 npm run test:e2e:install    # one-time: playwright install chromium
@@ -42,11 +45,25 @@ npm run models:update       # regenerate packages/core/models.json from litellm/
 npm run rebuild:sqlite3     # electron-rebuild better-sqlite3 after Electron version bumps
 ```
 
-The `docs/` directory is a separate Astro site with its own `package.json` (own `npm install`, not part of the workspaces).
+There is no root lint script; use `npm run typecheck` plus the relevant test target as the routine static checks. The `docs/` directory is a separate Astro site with its own `package.json` (run its own `npm install` there; it is not part of the workspaces).
 
 ## Test harness mechanics (read before touching tests)
 
 There is no test framework dependency. `build/test.mjs` esbuild-bundles each project's `test/` tree plus a list of runtime entry points into `.test-dist/<project>/test/` as CJS; `build/run-tests.mjs` runs the compiled files with Node's built-in runner (`node --test`). Each workspace's `npm test` just invokes both scripts with the workspace name. `--scope unit|integration|component` selects a subdirectory of `test/`.
+
+**Running one compiled file directly bypasses home isolation.** The throwaway
+`HOME` and `CCR_INTERNAL_*` come from `build/run-tests.mjs`, not from the test
+files, so `node --test .test-dist/...` on its own resolves `CONFIGDIR` to the
+real `~/.claude-code-router`. A test that calls `replacePersistedAppConfig` or
+applies a profile then overwrites the user's actual configuration, silently and
+completely. Most tests do not write config and are unaffected; the ones that do
+set the env themselves at module scope and import what reads it dynamically
+afterwards, because a static import is hoisted above the assignment
+(`config-credential-writes.test.mjs` and
+`profiles/claude-code-profile-shared-entries.test.mjs` are the pattern). A new
+test that writes config does the same, and asserts the throwaway home is in
+effect before it writes anything. Not every existing test does this yet, so pass
+the env on the command line when running one file.
 
 Two harness behaviors that matter:
 
