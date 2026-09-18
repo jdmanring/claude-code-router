@@ -1840,6 +1840,11 @@ export type BotGatewayQrWindowCloseResult = {
 };
 
 export type AppConfig = {
+  // Identifies the stored configuration a client read. Sending it back with a
+  // save lets the write be rejected when the stored config has moved on, rather
+  // than silently reverting whatever changed in between. It is issued on load,
+  // never persisted, and a save that omits it is accepted as before.
+  configRevision?: string;
   APIKEY: string;
   APIKEYS: ApiKeyConfig[];
   API_TIMEOUT_MS: number | string;

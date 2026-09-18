@@ -60,6 +60,18 @@ export class ConfigRepository {
     return this.readSetting(appConfigKey);
   }
 
+  // Identifies the stored config by content. A caller that read the config and
+  // saves it later can hand this back so the write is rejected rather than
+  // silently reverting whatever was written in between. Hashing the stored text
+  // rather than a re-serialized object keeps both sides comparing the same
+  // bytes, and it needs no schema change.
+  async readAppConfigRevision(): Promise<string | undefined> {
+    const database = await this.getDatabase();
+    const row = queryRows(database, "SELECT value_json FROM app_config WHERE key = ? LIMIT 1", [appConfigKey])[0];
+    const valueJson = readString(row?.value_json);
+    return valueJson ? createHash("sha256").update(valueJson).digest("hex").slice(0, 32) : undefined;
+  }
+
   async readSetting(key: string): Promise<unknown | undefined> {
     const database = await this.getDatabase();
     const row = queryRows(database, "SELECT value_json FROM app_config WHERE key = ? LIMIT 1", [key])[0];
@@ -192,6 +204,10 @@ export async function loadPersistedAppConfig(): Promise<unknown | undefined> {
 
 export async function loadPersistedAppSetting(key: string): Promise<unknown | undefined> {
   return configRepository.readSetting(key);
+}
+
+export async function loadPersistedAppConfigRevision(): Promise<string | undefined> {
+  return configRepository.readAppConfigRevision();
 }
 
 export async function replacePersistedAppConfig(value: unknown): Promise<void> {

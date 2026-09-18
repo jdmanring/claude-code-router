@@ -5,6 +5,7 @@ import {
   archiveLegacyJsonConfigFiles,
   loadPersistedApiKeys,
   loadPersistedAppConfig,
+  loadPersistedAppConfigRevision,
   replacePersistedApiKeys,
   replacePersistedAppConfig,
   replacePersistedConfigSnapshot
@@ -348,7 +349,9 @@ export async function loadAppConfig(): Promise<AppConfig> {
         console.warn(`[config] Failed to archive legacy JSON config: ${formatError(archiveError)}`);
       });
     }
-    return config;
+    // Issued after any repair write above, so the revision matches what is
+    // stored right now rather than what was stored when the read began.
+    return { ...config, configRevision: await loadPersistedAppConfigRevision() };
   } catch (error) {
     console.warn(`[config] Failed to load config: ${formatError(error)}`);
     const persistedApiKeys = await loadPersistedApiKeys().catch((storeError) => {
@@ -388,6 +391,28 @@ export async function saveAppThemePreference(theme: unknown): Promise<AppConfig[
     });
     return normalizedTheme;
   });
+}
+
+// Checked at the boundary a client writes through, not inside the save itself.
+// Internal callers legitimately load a config and save it moments later (theme,
+// profiles, credential rotation), and rejecting those would break flows that
+// were never the problem. What needs guarding is a save from a client that read
+// the config long ago and cannot see what changed since.
+export async function assertAppConfigRevisionIsCurrent(revision: string | undefined): Promise<void> {
+  if (revision === undefined) {
+    return;
+  }
+  const current = await loadPersistedAppConfigRevision();
+  if (current !== undefined && current !== revision) {
+    throw new StaleAppConfigError();
+  }
+}
+
+export class StaleAppConfigError extends Error {
+  constructor() {
+    super("The configuration changed since this page loaded it. Reload before saving, or the change made in between would be lost.");
+    this.name = "StaleAppConfigError";
+  }
 }
 
 async function saveAppConfigNow(config: AppConfig): Promise<AppConfig> {
@@ -748,8 +773,11 @@ function stableConfigJson(value: unknown): string {
 
 function sanitizeConfigForDisk(config: AppConfig): Record<string, unknown> {
   const { coreHost: _coreHost, corePort: _corePort, ...gateway } = config.gateway;
+  // The revision identifies the stored blob, so storing it inside that blob
+  // would change the very thing it identifies on every write.
+  const { configRevision: _configRevision, ...rest } = config;
   return {
-    ...config,
+    ...rest,
     APIKEY: "",
     APIKEYS: [],
     gateway,

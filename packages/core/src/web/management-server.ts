@@ -11,7 +11,7 @@ import { scanBotHandoffBluetoothTargets, scanBotHandoffWifiTargets } from "@ccr/
 import { cancelBotGatewayQrLogin, startBotGatewayQrLogin, waitBotGatewayQrLogin } from "@ccr/core/agents/bot-gateway/qr-login-service";
 import { syncClaudeAppGatewayConfig, restoreClaudeAppGatewayConfig } from "@ccr/core/agents/claude-app/gateway-service";
 import { getAppInfoPaths } from "@ccr/core/agents/app-info-paths";
-import { loadAppConfig, saveApiKeysConfig, saveAppConfig } from "@ccr/core/config/config";
+import { assertAppConfigRevisionIsCurrent, loadAppConfig, saveApiKeysConfig, saveAppConfig } from "@ccr/core/config/config";
 import {
   APP_CONFIG_DB_FILE,
   APP_NAME,
@@ -424,8 +424,12 @@ const rpcHandlers: Record<string, RpcHandler> = {
     return nextConfig;
   },
   saveConfig: async (config, options) => {
-    const previousConfig = await loadAppConfig();
     const nextInput = config as AppConfig;
+    // A management client sends back the whole config it loaded. If the stored
+    // config has moved on since, saving it would revert whatever changed in
+    // between without either side noticing.
+    await assertAppConfigRevisionIsCurrent(nextInput.configRevision);
+    const previousConfig = await loadAppConfig();
     if (nextInput.proxy.enabled) {
       const certificateStatus = await proxyService.getCertificateStatus();
       if (!certificateStatus.trusted) {

@@ -196,12 +196,20 @@ revision its author read, so any client holding a stale copy reverts every
 change made since. The management UI holds exactly such a copy for as long as
 its page is open.
 
-Two things make that visible rather than silent. Every write logs the top-level
-keys it moved (`[config] write changed: ...` in `ccr-service.log`), and
-`node scripts/config-audit.mjs` diffs the behaviour-deciding parts of the config
-against a saved baseline, naming the exact value that moved. Take the baseline
-with `--save` once the config is known good. Credentials are reduced to their
-length, so the baseline holds no secret.
+`loadAppConfig` issues a `configRevision` identifying the stored config, and the
+management RPC refuses a `saveConfig` whose revision is no longer current. The
+field is stripped before writing, so it never becomes part of what it
+identifies, and a save that omits it is accepted as before. The check lives at
+that boundary rather than inside `saveAppConfig` on purpose: internal flows
+(theme, profiles, credential rotation) legitimately load a config and save it
+moments later, and guarding those breaks flows that were never the problem.
+
+Two things also make a revert visible rather than silent. Every write logs the
+top-level keys it moved (`[config] write changed: ...` in `ccr-service.log`),
+and `node scripts/config-audit.mjs` diffs the behaviour-deciding parts of the
+config against a saved baseline, naming the exact value that moved. Take the
+baseline with `--save` once the config is known good. Credentials are reduced to
+their length, so the baseline holds no secret.
 
 ## Chain attempt numbering
 
