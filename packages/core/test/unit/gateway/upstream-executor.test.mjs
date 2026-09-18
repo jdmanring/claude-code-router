@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
 import { buildClaudeAppGatewayModelRoutes } from "@ccr/core/agents/claude-app/gateway-routes.ts";
 import { prepareClaudeAppDiscoveredModelRequest } from "@ccr/core/gateway/features/model-discovery.ts";
-import { fetchUpstreamWithFallback, prepareGatewayUpstreamAttemptForTest } from "@ccr/core/gateway/upstream/executor.ts";
+import { fetchUpstreamWithFallback, mergeFallbackResponseHeaders, prepareGatewayUpstreamAttemptForTest } from "@ccr/core/gateway/upstream/executor.ts";
 import { resetTargetCooldownsForTest } from "@ccr/core/gateway/upstream/target-cooldown.ts";
 
 // The target cooldown store is module state, so a 429 in one test would
@@ -921,7 +921,7 @@ async function runChainRequest(respond) {
       routedModel: "Primary/model-a",
       upstreamUrl: "http://127.0.0.1:3456/v1/messages"
     });
-    return { addressed, status: result.response.status };
+    return { addressed, result, status: result.response.status };
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -956,6 +956,21 @@ test("a success on one target does not clear a different target's cooldown", asy
   // The secondary answered 200; that must not put the primary back in rotation.
   const next = await runChainRequest(() => ok());
   assert.deepEqual(next.addressed, ["model-b"]);
+});
+
+test("the answering attempt reports its chain position, not the failure count", async () => {
+  // Put the primary into cooldown so the next request skips it.
+  await runChainRequest((n) => (n === 1 ? rateLimited() : ok()));
+
+  const second = await runChainRequest(() => ok());
+  assert.deepEqual(second.addressed, ["model-b"], "the primary is skipped, not attempted");
+  const headers = mergeFallbackResponseHeaders(new Headers(), second.result);
+  // A skipped entry never becomes a failed attempt, so the failure count is 0
+  // here while the answering entry sits at chain position 2. The request log
+  // matches raw trace bundles on that position.
+  assert.equal(second.result.failedAttempts.length, 0);
+  assert.equal(headers.get("x-ccr-final-route-attempt"), "2");
+  assert.equal(headers.get("x-ccr-fallback-attempts"), null);
 });
 
 test("a malformed-request status does not sideline the target", async () => {

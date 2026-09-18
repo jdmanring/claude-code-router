@@ -206,6 +206,10 @@ export type UpstreamFetchResult = {
   attempt: UpstreamAttempt;
   failedAttempts: UpstreamFailedAttempt[];
   response: Response;
+  // Position of the answering attempt in the chain, counting entries skipped
+  // for cooldown. failedAttempts.length cannot stand in for it: a skipped
+  // entry never becomes a failed attempt, so the two diverge by one per skip.
+  routeAttempt: number;
   timing: {
     attemptStartedAtMonoMs: number;
   };

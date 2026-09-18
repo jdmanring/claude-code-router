@@ -609,6 +609,7 @@ export async function fetchUpstreamWithFallback(input: {
         attempt,
         failedAttempts,
         response,
+        routeAttempt: attemptNumber,
         timing: {
           attemptStartedAtMonoMs
         }
@@ -1506,11 +1507,18 @@ export function destroyResponseStreams(streams: Readable[]): void {
 export function mergeFallbackResponseHeaders(headers: Headers, result: UpstreamFetchResult): Headers {
   const credentialIds = result.attempt.credentialIds ?? [];
   const credentialSaturated = result.attempt.headers?.["x-ccr-provider-credential-saturated"] === "true";
-  if (result.failedAttempts.length === 0 && credentialIds.length === 0 && !credentialSaturated) {
+  if (result.failedAttempts.length === 0 && credentialIds.length === 0 && !credentialSaturated &&
+    result.routeAttempt <= 1) {
     return headers;
   }
 
   const merged = new Headers(headers);
+  // x-ccr-fallback-attempts counts failures and is read positionally against
+  // x-ccr-fallback-failures, so it cannot carry the chain position. The request
+  // log matches raw trace bundles on chain position and needs its own value.
+  if (result.routeAttempt > 1) {
+    merged.set("x-ccr-final-route-attempt", String(result.routeAttempt));
+  }
   if (result.failedAttempts.length > 0) {
     merged.set("x-ccr-fallback-attempts", String(result.failedAttempts.length + 1));
     merged.set("x-ccr-fallback-failures", formatFallbackFailures(result.failedAttempts));

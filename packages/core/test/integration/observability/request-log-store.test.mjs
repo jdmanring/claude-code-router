@@ -930,6 +930,74 @@ test("RequestLogStore consumes fallback bundles by unique bundle id and only fin
   }
 });
 
+test("RequestLogStore matches the final bundle by chain position when the chain skipped entries", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "ccr-request-log-skipped-chain-test-"));
+  const store = new RequestLogStore(path.join(dir, "request-logs.sqlite"));
+  const startedAt = new Date().toISOString();
+  try {
+    // Chain of four: entries 1 and 3 skipped while cooling down, entry 2
+    // answered 400, entry 4 answered 200. One failed attempt, so
+    // x-ccr-fallback-attempts is 2 while the answering entry sits at 4.
+    await store.record({
+      completedAt: startedAt,
+      durationMs: 25,
+      method: "POST",
+      path: "/v1/messages",
+      providerName: "answering-provider",
+      requestBody: Buffer.from('{"model":"gateway-model"}'),
+      requestHeaders: { "content-type": "application/json" },
+      requestId: "skipped-chain",
+      responseBodyText: "gateway-body",
+      responseHeaders: {
+        "content-type": "application/json",
+        "x-ccr-fallback-attempts": "2",
+        "x-ccr-final-route-attempt": "4"
+      },
+      startedAt,
+      statusCode: 200,
+      url: "http://127.0.0.1:3456/v1/messages"
+    });
+
+    await store.writeBatch([
+      {
+        input: {
+          attempt: 2,
+          bundleId: "skipped-chain-failed",
+          provider: "failing-provider",
+          requestId: "skipped-chain",
+          responseBodyText: "chain-failure-body",
+          statusCode: 400
+        },
+        kind: "raw-trace-update",
+        sequence: 1
+      },
+      {
+        input: {
+          attempt: 4,
+          bundleId: "skipped-chain-answer",
+          provider: "answering-provider",
+          requestId: "skipped-chain",
+          responseBodyText: "chain-answer-body",
+          statusCode: 200
+        },
+        kind: "raw-trace-update",
+        sequence: 2
+      }
+    ]);
+
+    const page = await store.list({ pageSize: 25 });
+    const detail = await store.getDetail({
+      id: page.items.find((item) => item.requestId === "skipped-chain").id
+    });
+    assert.equal(detail.statusCode, 200);
+    assert.equal(detail.ok, true);
+    assert.equal(detail.responseBody.text, "chain-answer-body");
+  } finally {
+    await store.close();
+    rmSync(dir, { force: true, recursive: true });
+  }
+});
+
 test("RequestLogStore detects raw errors before applying errors-only body suppression", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "ccr-request-log-raw-error-policy-test-"));
   const store = new RequestLogStore(path.join(dir, "request-logs.sqlite"));

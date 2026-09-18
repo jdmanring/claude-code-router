@@ -5901,6 +5901,12 @@ function finalAttemptFromHeaders(
   headers: Record<string, string | string[]>,
   routeAttemptCount?: number
 ): number {
+  // Chain position of the answering attempt. x-ccr-fallback-attempts counts
+  // failures instead, which undercounts by one for every entry the chain
+  // skipped while it was cooling down; matching on it admits a failed
+  // attempt's raw trace as the final one and overwrites the stored outcome.
+  const routeAttempt = Number(headerValue(headers, "x-ccr-final-route-attempt"));
+  if (Number.isFinite(routeAttempt) && routeAttempt >= 1) return Math.floor(routeAttempt);
   const value = Number(headerValue(headers, "x-ccr-fallback-attempts"));
   if (Number.isFinite(value) && value >= 1) return Math.floor(value);
   return Number.isFinite(routeAttemptCount) && Number(routeAttemptCount) >= 1
