@@ -1898,8 +1898,15 @@ function parseRouterFallback(value: unknown): RouterFallbackConfig | undefined {
   const models = parseStringList(value.models ?? value.chain ?? value.fallbackModels)
     .map((model) => model.trim())
     .filter(Boolean);
+  // Carried rather than defaulted. This builds the returned config from a
+  // literal, so a field of RouterFallbackConfig that is not named here is
+  // dropped on load, and the next whole-config save then erases it from disk.
+  const detectStreamErrors = typeof value.detectStreamErrors === "boolean"
+    ? value.detectStreamErrors
+    : undefined;
 
   return {
+    ...(detectStreamErrors === undefined ? {} : { detectStreamErrors }),
     mode,
     models: uniqueStrings(models),
     retryCount
