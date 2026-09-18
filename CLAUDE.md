@@ -141,6 +141,37 @@ endpoints directly.
 Note that **CCR stores response bodies only for the final answer, never for
 chain attempts**, so a failing fallback leaves a status and no body.
 
+## Model slots, subagents, and what they cost
+
+A CCR-launched Claude Code session gets four model aliases from its profile,
+exported as `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL`
+(`agents/claude-code/environment.ts`). A subagent's `model:` frontmatter selects
+among exactly those four, so the choice of alias is a choice of provider chain
+and therefore of cost:
+
+| `model:` | Slot resolves to | Chain behind it |
+|---|---|---|
+| `haiku` | Gemini flash-lite | the Haiku rule's chain, about forty free models |
+| `opus` | a local Ollama model | the Opus rule's chain |
+| `fable` | the Claude plan model | metered against the plan |
+| `sonnet` | an OpenCode Zen free model | see below |
+
+The practical consequence is that **`haiku` subagents are close to free and can
+be run many at a time**, which makes fan-out retrieval the cheapest way to
+answer a question that spans many files. `fable` is the scarce one and is worth
+spending on judgement rather than retrieval. `.claude/agents/scout.md` and
+`.claude/agents/architect.md` are the two ends of that.
+
+Two cautions. Small free models do not fail loudly: a scout-style agent must be
+told to report "not found" rather than guess, because the caller cannot
+distinguish a confident wrong answer from a real one. And the `sonnet` slot
+currently points at an OpenCode Zen free model, which refuses every client that
+is not OpenCode, so that alias spends an attempt before falling through to the
+default chain on every call.
+
+Read the chain a slot actually reaches with `node scripts/config-audit.mjs
+--show` rather than assuming; the slots are config, not code.
+
 ## Config drift
 
 A config save replaces the whole stored blob and nothing checks it against the
