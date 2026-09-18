@@ -243,6 +243,27 @@ sent string never fires, which leaves its rewrite and its whole fallback chain
 unreachable while the request still succeeds by going directly to the model it
 named. The symptom is silence, not an error.
 
+## Tool routing for this repository
+
+These questions have an instrument that answers them better than grep, and this
+session repeatedly reached for grep instead. The cost was real: the Electron
+save boundary was missed until the code graph pointed at `AppConfig` as a hub
+and the symbol route produced the caller set.
+
+| Question | Instrument |
+|---|---|
+| Who calls X, what implements X, does this already exist | Serena (`find_symbol`, `find_referencing_symbols`), not grep |
+| Which symbols are central, where do I start reading | `graphify update . --no-cluster --force && graphify god-nodes`, rebuilt in the same breath, verified by node count and graph mtime |
+| Does this compiled artifact match the runtime | `re_verify_claim` against the binary, with a deliberately false control claim |
+| What does the memory graph look like | `python3 ~/.claude/memory_graph.py --check` |
+| Proving a negative | `command grep`; a plain search honours ignore files and under-reports |
+
+Two traps this repository has already sprung. A Serena reference query that
+returns nothing has not proven absence, and its cross-package index does not
+always resolve references here, so confirm a negative by a second route.
+Degree in the god-node ranking conflates fan-in with fan-out, so take the
+caller set from the symbol index rather than reading the ranking as importance.
+
 ## Test baseline
 
 `origin/main` does not pass its own core suite. Before attributing a core test failure to local work, reproduce it against pure upstream in a throwaway worktree (`git worktree add --detach <dir> origin/main`, symlink the root `node_modules`, then `node build/test.mjs core && node build/run-tests.mjs core`) and compare failure names. Attribute only the difference.
