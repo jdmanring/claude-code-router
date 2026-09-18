@@ -95,6 +95,27 @@ CCR does not serve model requests in-process. Flow:
 
 Which process runs what is easy to get wrong, and it matters when patching the request path. Agents connect to 3456, which is owned by the CCR process running `dist/main/cli.js`, not by the vendored child; the child owns 3457 only. The upstream fallback loop is bundled into `cli.js` alone. Confirm before assuming: `ss -ltnp | grep -E '3456|3457'` for ownership, and grep the installed `dist/main/*.js` for a symbol from the code being changed to find which bundle carries it.
 
+**The child opens the connection to the provider.** Port ownership is as above,
+but the socket to the upstream API belongs to the gateway child, not to
+`cli.js`. Verify it rather than reasoning about it: point a provider's base URL
+at a local listener, make one request, and read the peer of the established
+connection (`ss -tnp | grep <sink-port>` gives both sides; the side whose LOCAL
+port is the ephemeral one is the sender). This decides where a request-shaping
+bug can live, and it is the difference between a fix that can work and one that
+cannot.
+
+**The child rewrites the model id, and drops a leading segment that repeats the
+protocol family.** A model called `openai/gpt-oss-120b` addressed on
+`openai_chat_completions` leaves as `gpt-oss-120b`; the provider then answers
+`400 model_not_found` while the identical request made directly succeeds.
+Measured against a local sink: `openai/clean-model` arrived as `clean-model`
+while `qwen/`, `z-ai/` and an unrelated `vendorx/` prefix arrived intact. The
+selector CCR hands the child is complete, so this is the vendored runtime, not
+this repository. A provider hook cannot repair it either: `transformRequest` is
+never invoked on that dispatch path, although it fires normally for
+`openai_responses`. The workaround is to route such a provider through a model
+whose first segment is not the protocol vendor.
+
 Other top-level core dirs worth knowing: `agents/` (per-agent integrations: claude-code, codex, claude-app, bot-gateway, kilo, opencode, pi, zcode, local-providers), `providers/` (presets, probing, credential pools, OAuth, account snapshots), `observability/` (request logs, SQLite-backed, body chunks served through a worker), `usage/` (token/cost stats), `mcp/` (MCP servers CCR exposes to agents), `plugins/` (wrapper + core gateway plugins, marketplace), `profiles/` (agent profiles and launching agents against the gateway), `contracts/app.ts` (shared types across all four packages), `web/management-server.ts` (HTTP API + static UI serving for CLI/Docker mode), `storage/sqlite-native.ts` (single better-sqlite3 instance boundary).
 
 Default ports: gateway `127.0.0.1:3456` (agents point here), core gateway 3457, web management UI 3458. Docker fronts everything with nginx on container port 8080, published as 3458.

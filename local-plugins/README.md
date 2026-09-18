@@ -67,3 +67,22 @@ It logs once on load and once per request that it changes. Both lines matter: a
 plugin that never matched and a plugin that never loaded are otherwise
 indistinguishable in the log, which is how an earlier attempt at this fix was
 mistaken for a working one.
+
+## gateway-restore-vendor-prefixed-model
+
+Restores a model id whose leading segment the gateway runtime dropped, using the
+configured model list and only where exactly one configured id ends with what
+was sent, so an ambiguous or already-valid model is left alone.
+
+**It is not in the running config, because it does not work where it is needed.**
+Registered and carrying 70 candidate ids, its `transformRequest` was never
+invoked for a chat-completions provider request, while
+`gateway-codex-reasoning-content` fires normally for an `openai_responses`
+request. Provider hooks do not run on that dispatch path. The code and its nine
+tests are kept for whenever the right interception point exists; enabling it as
+it stands would read as a fix being in place while nothing changes.
+
+Note that a gateway plugin's own config goes on the **inner**
+`coreGateway.plugins[]` entry, not on the CCR plugin entry that carries it. Put
+it on the outer entry and the factory receives nothing, which looks exactly like
+having nothing configured.
