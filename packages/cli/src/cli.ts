@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, closeSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { botGatewayProfileEnv } from "@ccr/core/agents/bot-gateway/env";
 import { applyClaudeAppGatewayConfig } from "@ccr/core/agents/claude-app/gateway-service";
@@ -388,6 +388,16 @@ function parseWebArgs(args: string[], command: WebCliOptions["command"], default
   return options;
 }
 
+export function serviceLogFile(configDir = CONFIGDIR): string {
+  return path.join(configDir, "ccr-service.log");
+}
+
+function openServiceLogFile(): number {
+  const file = serviceLogFile();
+  mkdirSync(path.dirname(file), { recursive: true });
+  return openSync(file, "w");
+}
+
 async function startService(options: WebCliOptions): Promise<ServiceState> {
   const releaseStartLock = await acquireServiceStartLock();
   try {
@@ -411,12 +421,23 @@ async function startService(options: WebCliOptions): Promise<ServiceState> {
       "--no-open",
       ...(options.startGateway ? [] : ["--no-gateway"])
     ];
+    // The detached service is the only place the gateway, the router and every
+    // plugin report startup failures, and discarding its output made those
+    // failures unobservable: a plugin that throws in setup logs
+    // "[plugin:<id>] Disabled after startup failure" and the line went nowhere,
+    // so the only symptom was a feature silently not working. Point the child's
+    // stdout and stderr at a file instead.
+    //
+    // Truncated per start rather than appended, so the log always describes the
+    // run that is currently active and cannot grow without bound.
+    const logFd = openServiceLogFile();
     const child = spawn(process.execPath, childArgs, {
       detached: true,
       env: serviceChildEnv(serviceToken),
-      stdio: "ignore",
+      stdio: ["ignore", logFd, logFd],
       windowsHide: true
     });
+    closeSync(logFd);
     const spawnError = await waitForImmediateSpawnError(child, 1000);
     if (spawnError) {
       throw new Error(`Failed to start CCR service: ${spawnError}`);
