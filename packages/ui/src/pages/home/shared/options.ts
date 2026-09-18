@@ -43,38 +43,26 @@ import type {
   VirtualModelFusionWebSearchProvider,
   VirtualModelToolVisibility
 } from "@ccr/core/contracts/app";
-import anthropicProviderIconUrl from "@/assets/provider-icons/anthropic.png";
-import bailianProviderIconUrl from "@/assets/provider-icons/bailian.ico";
-import claudeapiProviderIconUrl from "@/assets/provider-icons/claudeapi.png";
-import code0ProviderIconUrl from "@/assets/provider-icons/code0.png";
-import deepseekProviderIconUrl from "@/assets/provider-icons/deepseek.ico";
-import fennoProviderIconUrl from "@/assets/provider-icons/fenno.jpg";
-import geminiProviderIconUrl from "@/assets/provider-icons/gemini.svg";
-import infistarAiProviderIconUrl from "@/assets/provider-icons/infistar-ai.jpg";
-import minimaxProviderIconUrl from "@/assets/provider-icons/minimax.ico";
-import mistralProviderIconUrl from "@/assets/provider-icons/mistral.webp";
-import moonshotProviderIconUrl from "@/assets/provider-icons/moonshot.ico";
-import nvidiaProviderIconUrl from "@/assets/provider-icons/nvidia.svg";
-import openaiProviderIconUrl from "@/assets/provider-icons/openai.png";
-import openrouterProviderIconUrl from "@/assets/provider-icons/openrouter.ico";
-import qiniuAiProviderIconUrl from "@/assets/provider-icons/qiniu-ai.png";
-import runapiProviderIconUrl from "@/assets/provider-icons/runapi.jpg";
-import siliconflowProviderIconUrl from "@/assets/provider-icons/siliconflow.png";
-import teamorouterProviderIconUrl from "@/assets/provider-icons/teamorouter.png";
-import unity2ProviderIconUrl from "@/assets/provider-icons/unity2.jpg";
-import xiaomiMimoProviderIconUrl from "@/assets/provider-icons/xiaomi-mimo.png";
-import zaiGlobalCodingProviderIconUrl from "@/assets/provider-icons/zai-global-coding.svg";
-import zaiGlobalGeneralProviderIconUrl from "@/assets/provider-icons/zai-global-general.svg";
-import zhipuCnCodingProviderIconUrl from "@/assets/provider-icons/zhipu-cn-coding.png";
-import zhipuCnGeneralProviderIconUrl from "@/assets/provider-icons/zhipu-cn-general.png";
 import agnesFreeProviderIconUrl from "@/assets/provider-icons/agnes-free.png";
 import aihubmixProviderIconUrl from "@/assets/provider-icons/aihubmix.png";
+import alibabaProviderIconUrl from "@/assets/provider-icons/alibaba.png";
+import anthropicProviderIconUrl from "@/assets/provider-icons/anthropic.png";
 import aurikoProviderIconUrl from "@/assets/provider-icons/auriko.png";
+import bailianProviderIconUrl from "@/assets/provider-icons/bailian.ico";
 import bazaarlinkProviderIconUrl from "@/assets/provider-icons/bazaarlink.png";
+import claudeapiProviderIconUrl from "@/assets/provider-icons/claudeapi.png";
+import cloudflareWorkersAiProviderIconUrl from "@/assets/provider-icons/cloudflare-workers-ai.png";
+import code0ProviderIconUrl from "@/assets/provider-icons/code0.png";
 import cohereProviderIconUrl from "@/assets/provider-icons/cohere.png";
+import deepseekProviderIconUrl from "@/assets/provider-icons/deepseek.ico";
+import electronhubProviderIconUrl from "@/assets/provider-icons/electronhub.png";
 import fastrouterProviderIconUrl from "@/assets/provider-icons/fastrouter.png";
+import fennoProviderIconUrl from "@/assets/provider-icons/fenno.jpg";
+import geminiProviderIconUrl from "@/assets/provider-icons/gemini.svg";
+import gonkabrokerProviderIconUrl from "@/assets/provider-icons/gonkabroker.png";
 import groqProviderIconUrl from "@/assets/provider-icons/groq.png";
 import huggingfaceProviderIconUrl from "@/assets/provider-icons/huggingface.png";
+import infistarAiProviderIconUrl from "@/assets/provider-icons/infistar-ai.jpg";
 import internAiProviderIconUrl from "@/assets/provider-icons/intern-ai.png";
 import kiloProviderIconUrl from "@/assets/provider-icons/kilo.png";
 import literouterProviderIconUrl from "@/assets/provider-icons/literouter.png";
@@ -82,22 +70,42 @@ import llmKiwiProviderIconUrl from "@/assets/provider-icons/llm-kiwi.png";
 import llm7ProviderIconUrl from "@/assets/provider-icons/llm7.png";
 import meganovaProviderIconUrl from "@/assets/provider-icons/meganova.png";
 import metaProviderIconUrl from "@/assets/provider-icons/meta.png";
+import minimaxProviderIconUrl from "@/assets/provider-icons/minimax.ico";
+import mistralProviderIconUrl from "@/assets/provider-icons/mistral.webp";
+import moonshotProviderIconUrl from "@/assets/provider-icons/moonshot.ico";
 import nagaProviderIconUrl from "@/assets/provider-icons/naga.jpg";
+import nvidiaProviderIconUrl from "@/assets/provider-icons/nvidia.svg";
 import ollamaProviderIconUrl from "@/assets/provider-icons/ollama.png";
+import openaiProviderIconUrl from "@/assets/provider-icons/openai.png";
+import opencodeZenProviderIconUrl from "@/assets/provider-icons/opencode-zen.svg";
+import openrouterProviderIconUrl from "@/assets/provider-icons/openrouter.ico";
 import orcarouterProviderIconUrl from "@/assets/provider-icons/orcarouter.png";
+import ovhProviderIconUrl from "@/assets/provider-icons/ovh.ico";
 import pollinationsProviderIconUrl from "@/assets/provider-icons/pollinations.png";
 import pooledProviderIconUrl from "@/assets/provider-icons/pooled.jpg";
+import poolsideProviderIconUrl from "@/assets/provider-icons/poolside.ico";
+import qiniuAiProviderIconUrl from "@/assets/provider-icons/qiniu-ai.png";
+import requestyProviderIconUrl from "@/assets/provider-icons/requesty.ico";
 import routewayProviderIconUrl from "@/assets/provider-icons/routeway.png";
+import runapiProviderIconUrl from "@/assets/provider-icons/runapi.jpg";
 import sambanovaProviderIconUrl from "@/assets/provider-icons/sambanova.png";
 import seaLionProviderIconUrl from "@/assets/provider-icons/sea-lion.png";
+import siliconflowProviderIconUrl from "@/assets/provider-icons/siliconflow.png";
+import teamorouterProviderIconUrl from "@/assets/provider-icons/teamorouter.png";
 import tokenreplyProviderIconUrl from "@/assets/provider-icons/tokenreply.png";
 import tokenrouterProviderIconUrl from "@/assets/provider-icons/tokenrouter.png";
+import unity2ProviderIconUrl from "@/assets/provider-icons/unity2.jpg";
 import v0ProviderIconUrl from "@/assets/provider-icons/v0.png";
 import veniceProviderIconUrl from "@/assets/provider-icons/venice.png";
 import vercelProviderIconUrl from "@/assets/provider-icons/vercel.png";
 import vsllmProviderIconUrl from "@/assets/provider-icons/vsllm.png";
+import xiaomiMimoProviderIconUrl from "@/assets/provider-icons/xiaomi-mimo.png";
 import xkiroProviderIconUrl from "@/assets/provider-icons/xkiro.png";
 import yoloAutoProviderIconUrl from "@/assets/provider-icons/yolo-auto.png";
+import zaiGlobalCodingProviderIconUrl from "@/assets/provider-icons/zai-global-coding.svg";
+import zaiGlobalGeneralProviderIconUrl from "@/assets/provider-icons/zai-global-general.svg";
+import zhipuCnCodingProviderIconUrl from "@/assets/provider-icons/zhipu-cn-coding.png";
+import zhipuCnGeneralProviderIconUrl from "@/assets/provider-icons/zhipu-cn-general.png";
 import zyloaiProviderIconUrl from "@/assets/provider-icons/zyloai.png";
 import openCodeProviderIconUrl from "@/assets/agent-logos/opencode.ico";
 import trayCyanIconUrl from "@/assets/tray-cyan.png";
@@ -403,67 +411,76 @@ export const mcpStdioMessageModeOptions: Array<{ label: string; value: GatewayMc
 export const providerPresetIconUrls: Record<string, string> = {
   "agnes-free": agnesFreeProviderIconUrl,
   aihubmix: aihubmixProviderIconUrl,
+  alibaba: alibabaProviderIconUrl,
+  anthropic: anthropicProviderIconUrl,
   auriko: aurikoProviderIconUrl,
+  bailian: bailianProviderIconUrl,
   bazaarlink: bazaarlinkProviderIconUrl,
+  claudeapi: claudeapiProviderIconUrl,
+  "cloudflare-workers-ai": cloudflareWorkersAiProviderIconUrl,
+  code0: code0ProviderIconUrl,
+  codex: openaiProviderIconUrl,
   cohere: cohereProviderIconUrl,
+  deepseek: deepseekProviderIconUrl,
+  electronhub: electronhubProviderIconUrl,
   fastrouter: fastrouterProviderIconUrl,
+  fenno: fennoProviderIconUrl,
+  gemini: geminiProviderIconUrl,
+  gonkabroker: gonkabrokerProviderIconUrl,
   groq: groqProviderIconUrl,
   huggingface: huggingfaceProviderIconUrl,
+  "infistar-ai": infistarAiProviderIconUrl,
   "intern-ai": internAiProviderIconUrl,
   kilo: kiloProviderIconUrl,
+  "kimi-coding": moonshotProviderIconUrl,
   literouter: literouterProviderIconUrl,
   "llm-kiwi": llmKiwiProviderIconUrl,
   llm7: llm7ProviderIconUrl,
   meganova: meganovaProviderIconUrl,
   meta: metaProviderIconUrl,
-  naga: nagaProviderIconUrl,
-  ollama: ollamaProviderIconUrl,
-  orcarouter: orcarouterProviderIconUrl,
-  pollinations: pollinationsProviderIconUrl,
-  pooled: pooledProviderIconUrl,
-  routeway: routewayProviderIconUrl,
-  sambanova: sambanovaProviderIconUrl,
-  "sea-lion": seaLionProviderIconUrl,
-  tokenreply: tokenreplyProviderIconUrl,
-  tokenrouter: tokenrouterProviderIconUrl,
-  v0: v0ProviderIconUrl,
-  venice: veniceProviderIconUrl,
-  vercel: vercelProviderIconUrl,
-  vsllm: vsllmProviderIconUrl,
-  xkiro: xkiroProviderIconUrl,
-  "yolo-auto": yoloAutoProviderIconUrl,
-  zyloai: zyloaiProviderIconUrl,
-  anthropic: anthropicProviderIconUrl,
-  bailian: bailianProviderIconUrl,
-  claudeapi: claudeapiProviderIconUrl,
-  code0: code0ProviderIconUrl,
-  deepseek: deepseekProviderIconUrl,
-  fenno: fennoProviderIconUrl,
-  gemini: geminiProviderIconUrl,
-  "infistar-ai": infistarAiProviderIconUrl,
-  "kimi-coding": moonshotProviderIconUrl,
   "minimax-cn": minimaxProviderIconUrl,
   "minimax-global": minimaxProviderIconUrl,
   mistral: mistralProviderIconUrl,
   moonshot: moonshotProviderIconUrl,
   "moonshot-global": moonshotProviderIconUrl,
+  naga: nagaProviderIconUrl,
   nvidia: nvidiaProviderIconUrl,
+  ollama: ollamaProviderIconUrl,
   openai: openaiProviderIconUrl,
   "opencode-go": openCodeProviderIconUrl,
+  "opencode-zen": opencodeZenProviderIconUrl,
   openrouter: openrouterProviderIconUrl,
+  orcarouter: orcarouterProviderIconUrl,
+  ovh: ovhProviderIconUrl,
+  pollinations: pollinationsProviderIconUrl,
+  pooled: pooledProviderIconUrl,
+  poolside: poolsideProviderIconUrl,
   "qiniu-ai": qiniuAiProviderIconUrl,
+  requesty: requestyProviderIconUrl,
+  routeway: routewayProviderIconUrl,
   runapi: runapiProviderIconUrl,
+  sambanova: sambanovaProviderIconUrl,
+  "sea-lion": seaLionProviderIconUrl,
   siliconflow: siliconflowProviderIconUrl,
   teamorouter: teamorouterProviderIconUrl,
+  tokenreply: tokenreplyProviderIconUrl,
+  tokenrouter: tokenrouterProviderIconUrl,
   unity2: unity2ProviderIconUrl,
+  v0: v0ProviderIconUrl,
+  venice: veniceProviderIconUrl,
+  vercel: vercelProviderIconUrl,
+  vsllm: vsllmProviderIconUrl,
   xiaomi: xiaomiMimoProviderIconUrl,
   "xiaomi-token-plan-ams": xiaomiMimoProviderIconUrl,
   "xiaomi-token-plan-cn": xiaomiMimoProviderIconUrl,
   "xiaomi-token-plan-sgp": xiaomiMimoProviderIconUrl,
+  xkiro: xkiroProviderIconUrl,
+  "yolo-auto": yoloAutoProviderIconUrl,
   "zai-global-coding": zaiGlobalCodingProviderIconUrl,
   "zai-global-general": zaiGlobalGeneralProviderIconUrl,
   "zhipu-cn-coding": zhipuCnCodingProviderIconUrl,
-  "zhipu-cn-general": zhipuCnGeneralProviderIconUrl
+  "zhipu-cn-general": zhipuCnGeneralProviderIconUrl,
+  zyloai: zyloaiProviderIconUrl
 };
 
 export const trayMascotIconUrls: Record<"cyan" | "orange" | "violet", string> = {
