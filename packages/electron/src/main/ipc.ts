@@ -10,7 +10,7 @@ import { cancelBotGatewayQrLogin, startBotGatewayQrLogin, waitBotGatewayQrLogin 
 import { closeBotGatewayQrWindow, openBotGatewayQrWindow } from "./bot-gateway-qr-window-service";
 import { syncClaudeAppGatewayConfig } from "@ccr/core/agents/claude-app/gateway-service";
 import { getAppInfoPaths } from "@ccr/core/agents/app-info-paths";
-import { loadAppConfig, saveApiKeysConfig, saveAppConfig, saveAppThemePreference, withClaudeDesignRuntimePluginConfig } from "@ccr/core/config/config";
+import { assertAppConfigRevisionIsCurrent, loadAppConfig, saveApiKeysConfig, saveAppConfig, saveAppThemePreference, withClaudeDesignRuntimePluginConfig } from "@ccr/core/config/config";
 import {
   APP_CONFIG_DB_FILE,
   APP_NAME,
@@ -313,6 +313,11 @@ ipcMain.handle(IPC_CHANNELS.appRevealProxyCertificate, () => {
   shell.showItemInFolder(PROXY_CA_CERT_FILE);
 });
 ipcMain.handle(IPC_CHANNELS.appSaveConfig, async (_event, config: AppConfig, options?: AppSaveConfigOptions) => {
+  // The desktop renderer holds a whole config for as long as its window is
+  // open, exactly like the management page, so this boundary needs the same
+  // check. Guarding only the web RPC would leave the desktop app able to
+  // revert a change made elsewhere without either side noticing.
+  await assertAppConfigRevisionIsCurrent(config.configRevision);
   const previousConfig = await loadAppConfig();
   if (config.proxy.enabled) {
     const certificateStatus = await proxyService.getCertificateStatus();
