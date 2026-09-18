@@ -43,8 +43,13 @@ function snapshot(source) {
   for (const provider of source.Providers ?? []) {
     providers[provider.name] = {
       apiKey: secretLength(provider.api_key ?? provider.apiKey),
+      // Type and base URL together. A capability pointed at the wrong URL is
+      // still the right type, so recording the type alone reports no drift
+      // while the provider is unreachable.
       capabilities: (provider.capabilities ?? [])
-        .map((capability) => (typeof capability === "string" ? capability : capability.type))
+        .map((capability) => (typeof capability === "string"
+          ? capability
+          : `${capability.type}@${capability.baseUrl ?? "(no base url)"}`))
         .sort(),
       enabled: provider.enabled !== false,
       modelCount: (provider.models ?? []).length,
