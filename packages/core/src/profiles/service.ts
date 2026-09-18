@@ -404,9 +404,18 @@ function applyClaudeDesignProfile(profile: ProfileConfig, appliedAt: string): Pr
 // profile homes already link the same class of entries; this is the Claude Code
 // equivalent.
 //
-// `plugins` is deliberately not linked. A Claude Code plugin can register
-// blocking hooks and MCP servers, so adopting one is a permissions decision
-// rather than a content one, and a profile should not make it silently.
+// `plugins` is deliberately not linked, for a different reason than the rest.
+// The entries above are content the user owns and a profile only reads. The
+// plugin directory is mutable state that Claude Code writes to and versions
+// independently: each config directory keeps its own cache of marketplace
+// revisions and its own installed set, and the two drift as soon as either side
+// updates. Linking one onto the other therefore does not consolidate them, it
+// silently changes which revision every session in that profile loads, in
+// whichever direction the link happens to point. Measured 2026-09-18: both
+// directories held the same ten plugins, but the profile's cache carried
+// ponytail 4.9.0 against 4.8.4 in the user's, so linking would have been a
+// downgrade presented as a cleanup. Consolidating them is a deliberate act
+// that has to start by bringing both to the same revision.
 function linkClaudeCodeProfileSharedEntries(profile: ProfileConfig): void {
   if (!isGeneratedProfileScope(profile.scope)) {
     return;

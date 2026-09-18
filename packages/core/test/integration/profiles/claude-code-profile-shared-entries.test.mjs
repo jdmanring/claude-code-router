@@ -96,9 +96,10 @@ test("a plugin directory is not adopted on the user's behalf", async () => {
   mkdirSync(path.join(userClaudeDir(), "plugins"), { recursive: true });
   const profileHome = await applyWith(profileFor("no-plugin-link"));
 
-  // A plugin can register blocking hooks and MCP servers, so adopting one is a
-  // permissions decision. Linking it silently would make that decision for the
-  // user; see the note on linkClaudeCodeProfileSharedEntries.
+  // Unlike the entries that are linked, the plugin directory is mutable state
+  // with its own cache of marketplace revisions per config directory. Linking
+  // it would not consolidate the two, it would change which revision every
+  // session in the profile loads; see linkClaudeCodeProfileSharedEntries.
   assert.equal(existsSync(path.join(profileHome, "plugins")), false,
     "plugins must not be linked into a profile config dir");
 });
