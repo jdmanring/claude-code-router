@@ -93,6 +93,54 @@ Rules live in `build/esbuild.config.mjs` and `tests/architecture/` and fail the 
 
 When adding imports inside `core`, a new dependency edge can silently violate one of these; if a bundle size or forbidden-input error appears after an import change, this is why.
 
+## Fork-local plugins (`local-plugins/`)
+
+CCR's plugin system is the extension point for anything that must live and die
+with the server. Plugins are loaded by absolute module path from the `plugins`
+array in config, so `local-plugins/` adds no diff to any file upstream also
+ships and an ingest merge has nothing to reconcile.
+
+`local-plugins/process-supervisor.mjs` runs external processes for the server's
+lifetime: it starts each in order, waits on its `readyUrl` before the next, and
+unwinds in reverse on stop. Tests are not in the workspace harness; run them
+with `node --test local-plugins/process-supervisor.test.mjs`.
+
+Three things about the plugin API that are not discoverable from the types:
+
+- **`context.pluginConfig` is the plugin entry's `config` value**, not the entry
+  itself (`pluginConfig: pluginConfig.config` in `plugins/service.ts`). Reading
+  `.config` off it again yields undefined, and the plugin then does nothing and
+  reports nothing.
+- **Setting all three `surfaces` to `false` disables the plugin entirely.**
+  `loadConfiguredPlugin` returns before importing the module unless
+  `apps || gateway || provider` is true, and each reads `!== false`. A
+  lifecycle-only plugin must leave `surfaces` unset.
+- **`ccr start` discards the daemon's output** (`stdio: "ignore"` in the CLI), so
+  `[plugin:<id>] Disabled after startup failure` is never written anywhere. Use
+  `ccr serve --no-open` in the foreground to see plugin diagnostics.
+
+## Provider protocol selection
+
+The router picks the upstream protocol from a provider's **`capabilities` list**,
+not from its `type` and not from `protocolDetectionMode`. Detection adds a
+capability whenever the route exists, and a route that answers 401 rather than
+404 reads as supported, so an OpenAI-compatible provider can end up addressed as
+`anthropic_messages`.
+
+The failure surfaces as the provider's own HTTP error, which reads as a
+credential or quota problem. Measured 2026-09-18: OVH answered 403 and
+Fastrouter 400 on `provider::anthropic_messages/...` while both answered 200 on
+`/chat/completions` with the same key. `protocolDetectionMode: "manual"` does
+not restrict anything; OVH was already manual and still carried three
+capabilities.
+
+Read the `provider::protocol/model` triple in `node scripts/ccr-log.mjs --trace
+<id>` before attributing a chain 4xx to a provider, and confirm by calling both
+endpoints directly.
+
+Note that **CCR stores response bodies only for the final answer, never for
+chain attempts**, so a failing fallback leaves a status and no body.
+
 ## Test baseline
 
 `origin/main` does not pass its own core suite. Before attributing a core test failure to local work, reproduce it against pure upstream in a throwaway worktree (`git worktree add --detach <dir> origin/main`, symlink the root `node_modules`, then `node build/test.mjs core && node build/run-tests.mjs core`) and compare failure names. Attribute only the difference.
