@@ -219,6 +219,19 @@ default chain on every call.
 Read the chain a slot actually reaches with `node scripts/config-audit.mjs
 --show` rather than assuming; the slots are config, not code.
 
+The rules that give a slot its chain do not live in `Router.rules`, which is
+empty. They are in `profile.profiles[<n>].routing.rules`, each with its own
+`fallback.models`, which is why a request sent straight to 3456 by hand routes
+`source=default` and never exercises them. Checking one by hand therefore needs
+the profile, not a bare curl.
+
+That separation hides a dead rule well. A condition is compared against
+`request.body.model` verbatim, so it has to spell the provider's display name
+exactly as the slot exports it, and nothing warns when it does not: the request
+still succeeds, straight down the short default chain. Audit them against each
+other rather than reading them, by testing every rule's `condition.right` as a
+prefix of some slot value and treating a rule that prefixes none as dead.
+
 ## Provider triage
 
 **OVH is anonymous access and takes no API key.** Its empty `api_key` is correct
