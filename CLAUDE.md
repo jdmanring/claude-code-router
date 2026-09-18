@@ -235,6 +235,20 @@ provider directly with the same key, model and body before touching config, and
 use at least 16 `max_tokens`, because some providers reject less and that
 manufactures a failure that is not there.
 
+## Usage tracking
+
+A provider reports usage only when its config carries an `account` block; a
+preset supplies one for a minority of providers. Where none exists, an
+`http-json` connector can be written by hand against the provider's own
+response, with `mapping.meters[]` naming JSONPath expressions for `limit`,
+`used` and `remaining` (arithmetic over them is allowed, so
+`"$.limits.daily_tokens - $.usage.daily.tokens"` works). Thirteen providers
+report here; the recipe and the discovery sweep are in project memory.
+
+Do not wire a provider whose endpoint carries no consumption figures. A
+connector over key metadata or a raw request list reports "ok" while showing
+nothing, which reads as working tracking and is worse than none.
+
 ## Config drift
 
 A config save replaces the whole stored blob and nothing checks it against the
