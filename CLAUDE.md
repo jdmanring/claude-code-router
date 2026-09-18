@@ -141,6 +141,38 @@ endpoints directly.
 Note that **CCR stores response bodies only for the final answer, never for
 chain attempts**, so a failing fallback leaves a status and no body.
 
+## Chain attempt numbering
+
+Two different counts describe a fallback chain and they are not interchangeable:
+
+- The chain **position** of an attempt (`index + 1`, published as
+  `x-ccr-route-attempt` on the upstream request and `x-ccr-final-route-attempt`
+  on the response) counts every entry the loop walked, including entries skipped
+  because the target was cooling down.
+- The **failure count** (`failedAttempts.length + 1`, published as
+  `x-ccr-fallback-attempts`) counts only attempts that were sent and failed. A
+  skipped entry never enters `failedAttempts`.
+
+The two diverge by one for every skip. `request_log_store` matches raw trace
+bundles to a request by chain position, so it reads the position header;
+reading the failure count instead admits a failed attempt's bundle as the final
+one, and the stored status, provider, model and body then describe an attempt
+the client never received. `x-ccr-fallback-attempts` cannot be repurposed for
+position, because `x-ccr-fallback-failures` is parsed positionally against it.
+
+`failedAttempts.length` also feeds the retry backoff, so it is not free to
+redefine either.
+
+## Routing rules match the request body verbatim
+
+A rule condition compares against `request.body.model` exactly as the agent
+sent it, not against a provider display name. The value that actually arrives
+is in the request log's `requested_model` column; read it before writing or
+trusting a condition. A condition that names a provider label rather than the
+sent string never fires, which leaves its rewrite and its whole fallback chain
+unreachable while the request still succeeds by going directly to the model it
+named. The symptom is silence, not an error.
+
 ## Test baseline
 
 `origin/main` does not pass its own core suite. Before attributing a core test failure to local work, reproduce it against pure upstream in a throwaway worktree (`git worktree add --detach <dir> origin/main`, symlink the root `node_modules`, then `node build/test.mjs core && node build/run-tests.mjs core`) and compare failure names. Attribute only the difference.
