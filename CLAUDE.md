@@ -235,6 +235,23 @@ provider directly with the same key, model and body before touching config, and
 use at least 16 `max_tokens`, because some providers reject less and that
 manufactures a failure that is not there.
 
+**A payment-shaped error is a claim about the request, not the account.** Every
+provider configured here offers something free or is already paid for, so
+"add credits" is the last conclusion to reach and the only one that costs money
+to act on. Two things make it look like the first. `scripts/`-style sweeps read
+`upstream.attempt.outcome`, which is CCR's own attempt after the gateway child
+has chosen a protocol and rewritten the model id, so a 402 there can be either
+of those two faults surfacing as the provider's own error. And the configured model
+is often the paid one while the provider's catalogue lists free siblings that
+answer 200 on the same key with no balance.
+
+Establish both before writing a sentence about someone's balance: `GET
+{base}/v1/models` with the provider's key to see what it calls free, then POST
+directly to `{base}/chat/completions` with that model. Only the direct call may
+be quoted about an account. Note also that a provider's "free tier" is often a
+monthly credit allowance rather than zero-cost models, which exhausts and then
+resets without anyone owing anything.
+
 ## Usage tracking
 
 A provider reports usage only when its config carries an `account` block; a
