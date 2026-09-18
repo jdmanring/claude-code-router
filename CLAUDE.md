@@ -258,6 +258,13 @@ of those two faults surfacing as the provider's own error. And the configured mo
 is often the paid one while the provider's catalogue lists free siblings that
 answer 200 on the same key with no balance.
 
+A provider that fronts several upstreams bills per upstream, so the prefix on
+the model id chooses the pool and the same model is free under one and charged
+under another. Measured on Requesty: `google/gemma-4-31b-it` answers while
+`deepinfra/google/gemma-4-31B-it` returns a balance error, and
+`nvidia/nemotron-3-ultra-550b-a55b` answers while the `nebius/` copy does not.
+Test each prefix rather than the model.
+
 Establish both before writing a sentence about someone's balance: `GET
 {base}/v1/models` with the provider's key to see what it calls free, then POST
 directly to `{base}/chat/completions` with that model. Only the direct call may
