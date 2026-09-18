@@ -137,7 +137,10 @@ async function stopProcess(entry, logger) {
 }
 
 export async function setup(context) {
-  const settings = context?.pluginConfig?.config ?? {};
+  // `context.pluginConfig` is already the plugin's own `config` value, not the
+  // whole plugin entry: the host passes `pluginConfig.config` through. Reading
+  // `.config` off it again finds nothing and starts nothing, silently.
+  const settings = context?.pluginConfig ?? {};
   const specs = Array.isArray(settings.processes) ? settings.processes : [];
   const logger = context?.logger;
   const started = [];

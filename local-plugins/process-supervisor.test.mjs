@@ -4,6 +4,17 @@ import { setup } from "./process-supervisor.mjs";
 
 const NODE = process.execPath;
 
+/**
+ * Mirrors how CCR builds the plugin context. The host passes the plugin entry's
+ * `config` value through as `pluginConfig`, so a test that nests `config` again
+ * encodes the wrong contract: it passes while the real plugin reads one level
+ * too deep and starts nothing. See `pluginConfig: pluginConfig.config` in
+ * `packages/core/src/plugins/service.ts`.
+ */
+function hostContext(logger, entry) {
+  return { logger, pluginConfig: entry.config };
+}
+
 /** Ask the OS, not the code under test. Signal 0 throws ESRCH once a pid is gone. */
 function isAlive(pid) {
   try {
@@ -37,27 +48,24 @@ function recorder() {
   return { lines, info: record, warn: record, error: record };
 }
 
-function pidsFrom(logger) {
-  return logger.lines
+const pidsFrom = (logger) =>
+  logger.lines
     .map((line) => /\(pid (\d+)\)/.exec(line))
     .filter(Boolean)
     .map((match) => Number(match[1]));
-}
 
 const settle = (ms = 300) => new Promise((resolve) => setTimeout(resolve, ms));
 const forever = (extra = "") => ({
   command: NODE,
   args: ["-e", `${extra}setInterval(() => {}, 1000)`]
 });
+const entry = (processes) => ({ config: { processes } });
 
 test("a started process really runs, and onStop really ends it", async () => {
   const logger = recorder();
-  const registration = await setup({
-    logger,
-    pluginConfig: { config: { processes: [{ name: "sleeper", ...forever() }] } }
-  });
+  const registration = await setup(hostContext(logger, entry([{ name: "sleeper", ...forever() }])));
   const [pid] = pidsFrom(logger);
-  assert.ok(pid, "the plugin did not report a pid, so liveness cannot be checked");
+  assert.ok(pid, "the plugin reported no pid, so liveness cannot be checked");
   assert.equal(isAlive(pid), true, "the process was not running after setup");
 
   await registration.onStop({ reason: "stop" });
@@ -67,17 +75,9 @@ test("a started process really runs, and onStop really ends it", async () => {
 
 test("processes start in declaration order and stop in reverse", async () => {
   const logger = recorder();
-  const registration = await setup({
-    logger,
-    pluginConfig: {
-      config: {
-        processes: [
-          { name: "first", ...forever() },
-          { name: "second", ...forever() }
-        ]
-      }
-    }
-  });
+  const registration = await setup(
+    hostContext(logger, entry([{ name: "first", ...forever() }, { name: "second", ...forever() }]))
+  );
   const started = logger.lines.filter((line) => line.includes("started "));
   assert.match(started[0], /first/);
   assert.match(started[1], /second/);
@@ -91,22 +91,20 @@ test("processes start in declaration order and stop in reverse", async () => {
 test("a readiness failure stops what already started instead of leaking it", async () => {
   const logger = recorder();
   await assert.rejects(
-    setup({
-      logger,
-      pluginConfig: {
-        config: {
-          processes: [
-            { name: "healthy", ...forever() },
-            {
-              name: "never-ready",
-              ...forever(),
-              readyUrl: "http://127.0.0.1:59999/healthz",
-              readyTimeoutMs: 700
-            }
-          ]
-        }
-      }
-    }),
+    setup(
+      hostContext(
+        logger,
+        entry([
+          { name: "healthy", ...forever() },
+          {
+            name: "never-ready",
+            ...forever(),
+            readyUrl: "http://127.0.0.1:59999/healthz",
+            readyTimeoutMs: 700
+          }
+        ])
+      )
+    ),
     /did not answer/
   );
   await settle(300);
@@ -120,41 +118,37 @@ test("a readiness failure stops what already started instead of leaking it", asy
 test("a process that exits early is reported as exiting, not as a readiness timeout", async () => {
   const logger = recorder();
   await assert.rejects(
-    setup({
-      logger,
-      pluginConfig: {
-        config: {
-          processes: [
-            {
-              name: "instant-exit",
-              command: NODE,
-              args: ["-e", "process.exit(3)"],
-              readyUrl: "http://127.0.0.1:59999/healthz",
-              readyTimeoutMs: 8000
-            }
-          ]
-        }
-      }
-    }),
+    setup(
+      hostContext(
+        logger,
+        entry([
+          {
+            name: "instant-exit",
+            command: NODE,
+            args: ["-e", "process.exit(3)"],
+            readyUrl: "http://127.0.0.1:59999/healthz",
+            readyTimeoutMs: 8000
+          }
+        ])
+      )
+    ),
     /exited with code 3 before it became ready/
   );
 });
 
 test("a process ignoring SIGTERM survives when force is unset, and is reported", async () => {
   const logger = recorder();
-  const registration = await setup({
-    logger,
-    pluginConfig: {
-      config: {
-        processes: [
-          { name: "stubborn", ...forever("process.on('SIGTERM', () => {});"), stopTimeoutMs: 400 }
-        ]
-      }
-    }
-  });
+  const registration = await setup(
+    hostContext(
+      logger,
+      entry([
+        { name: "stubborn", ...forever("process.on('SIGTERM', () => {});"), stopTimeoutMs: 400 }
+      ])
+    )
+  );
   const [pid] = pidsFrom(logger);
-  // The child installs its SIGTERM handler asynchronously; signalling before it
-  // does means the default action kills it and the test proves nothing.
+  // The child installs its handler asynchronously; signalling first means the
+  // default action kills it and the test proves nothing.
   await settle(400);
   await registration.onStop({ reason: "stop" });
 
@@ -167,21 +161,19 @@ test("a process ignoring SIGTERM survives when force is unset, and is reported",
 
 test("force ends a process that ignores SIGTERM", async () => {
   const logger = recorder();
-  const registration = await setup({
-    logger,
-    pluginConfig: {
-      config: {
-        processes: [
-          {
-            name: "stubborn-forced",
-            ...forever("process.on('SIGTERM', () => {});"),
-            stopTimeoutMs: 400,
-            force: true
-          }
-        ]
-      }
-    }
-  });
+  const registration = await setup(
+    hostContext(
+      logger,
+      entry([
+        {
+          name: "stubborn-forced",
+          ...forever("process.on('SIGTERM', () => {});"),
+          stopTimeoutMs: 400,
+          force: true
+        }
+      ])
+    )
+  );
   const [pid] = pidsFrom(logger);
   await settle(400);
   await registration.onStop({ reason: "stop" });
@@ -199,22 +191,20 @@ test("an entry already answering its readiness url is not started again", async 
   const { port } = server.address();
   const logger = recorder();
   try {
-    const registration = await setup({
-      logger,
-      pluginConfig: {
-        config: {
-          processes: [
-            {
-              name: "already-up",
-              // Would exit 3 immediately and fail setup if it were ever spawned.
-              command: NODE,
-              args: ["-e", "process.exit(3)"],
-              readyUrl: `http://127.0.0.1:${port}/`
-            }
-          ]
-        }
-      }
-    });
+    const registration = await setup(
+      hostContext(
+        logger,
+        entry([
+          {
+            name: "already-up",
+            // Would exit 3 immediately and fail setup if it were ever spawned.
+            command: NODE,
+            args: ["-e", "process.exit(3)"],
+            readyUrl: `http://127.0.0.1:${port}/`
+          }
+        ])
+      )
+    );
     assert.equal(pidsFrom(logger).length, 0, "it spawned a duplicate of a process already serving");
     await registration.onStop({ reason: "stop" });
   } finally {
