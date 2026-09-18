@@ -113,7 +113,16 @@ while `qwen/`, `z-ai/` and an unrelated `vendorx/` prefix arrived intact. The
 selector CCR hands the child is complete, so this is the vendored runtime, not
 this repository. A provider hook cannot repair it either: `transformRequest` is
 never invoked on that dispatch path, although it fires normally for
-`openai_responses`. The workaround is to route such a provider through a model
+`openai_responses`.
+
+The same rule strips a segment matching the provider's **runtime id**, which is
+its explicit `id` when set: `poolside::openai_chat_completions/poolside/laguna-s-2.1`
+reached the provider as `laguna-s-2.1`. That half has a config-level fix. Giving
+the provider an id that is not the model's vendor prefix (`poolside` ->
+`poolside-api`) stops the collision without touching the model ids the provider
+requires, and both Poolside and Tokeness went from 400 to answering on the first
+attempt. Where the colliding segment is the protocol vendor rather than the
+provider id there is no such escape, so route those providers through a model
 whose first segment is not the protocol vendor.
 
 Other top-level core dirs worth knowing: `agents/` (per-agent integrations: claude-code, codex, claude-app, bot-gateway, kilo, opencode, pi, zcode, local-providers), `providers/` (presets, probing, credential pools, OAuth, account snapshots), `observability/` (request logs, SQLite-backed, body chunks served through a worker), `usage/` (token/cost stats), `mcp/` (MCP servers CCR exposes to agents), `plugins/` (wrapper + core gateway plugins, marketplace), `profiles/` (agent profiles and launching agents against the gateway), `contracts/app.ts` (shared types across all four packages), `web/management-server.ts` (HTTP API + static UI serving for CLI/Docker mode), `storage/sqlite-native.ts` (single better-sqlite3 instance boundary).
