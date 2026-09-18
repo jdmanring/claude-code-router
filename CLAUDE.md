@@ -141,6 +141,20 @@ endpoints directly.
 Note that **CCR stores response bodies only for the final answer, never for
 chain attempts**, so a failing fallback leaves a status and no body.
 
+## Config drift
+
+A config save replaces the whole stored blob and nothing checks it against the
+revision its author read, so any client holding a stale copy reverts every
+change made since. The management UI holds exactly such a copy for as long as
+its page is open.
+
+Two things make that visible rather than silent. Every write logs the top-level
+keys it moved (`[config] write changed: ...` in `ccr-service.log`), and
+`node scripts/config-audit.mjs` diffs the behaviour-deciding parts of the config
+against a saved baseline, naming the exact value that moved. Take the baseline
+with `--save` once the config is known good. Credentials are reduced to their
+length, so the baseline holds no secret.
+
 ## Chain attempt numbering
 
 Two different counts describe a fallback chain and they are not interchangeable:
