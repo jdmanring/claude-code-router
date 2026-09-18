@@ -716,7 +716,34 @@ function readLegacyJsonConfig(): LegacyJsonConfigLoadResult | undefined {
 }
 
 async function writeSanitizedConfig(config: AppConfig): Promise<void> {
-  await replacePersistedAppConfig(sanitizeConfigForDisk(config));
+  const next = sanitizeConfigForDisk(config);
+  reportAppConfigWrite(await loadPersistedAppConfig(), next);
+  await replacePersistedAppConfig(next);
+}
+
+// Every write replaces the whole blob, and nothing checks it against the
+// revision its author started from. A caller that read the config and saved it
+// later, such as a management UI page left open, therefore reverts every change
+// made in between and reports nothing. Naming the keys each write moves is what
+// makes that visible: a save the author did not intend shows up here as a key
+// they never touched.
+function reportAppConfigWrite(previous: unknown, next: Record<string, unknown>): void {
+  if (!isObject(previous)) return;
+  const before = previous as Record<string, unknown>;
+  const changed = uniqueStrings([...Object.keys(before), ...Object.keys(next)])
+    .filter((key) => stableConfigJson(before[key]) !== stableConfigJson(next[key]));
+  if (changed.length === 0) return;
+  console.warn(`[config] write changed: ${changed.join(", ")}`);
+}
+
+// Key order is not meaningful in a config blob, and a reserialized-but-equal
+// value reported as a change would make the line above useless noise.
+function stableConfigJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item) =>
+    isObject(item) && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : item
+  ) ?? "undefined";
 }
 
 function sanitizeConfigForDisk(config: AppConfig): Record<string, unknown> {
