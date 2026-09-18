@@ -75,7 +75,12 @@ function snapshot(source) {
       sonnet: profile.sonnetModel ?? null
     };
   }
-  agentModels["(global claudeCode)"] = {
+  // The legacy global block is not editable in the current UI, which renders
+  // profile.profiles only. Its stale model set is harmless while it is
+  // disabled, so its state is recorded with that flag rather than alongside
+  // the models that are actually in use.
+  agentModels["(legacy claudeCode block)"] = {
+    ENABLED: source.profile?.claudeCode?.enabled === true,
     fable: source.profile?.claudeCode?.fableModel ?? null,
     haiku: source.profile?.claudeCode?.haikuModel ?? null,
     opus: source.profile?.claudeCode?.opusModel ?? null,
