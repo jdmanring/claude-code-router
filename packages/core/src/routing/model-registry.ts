@@ -34,6 +34,16 @@ export class ModelRegistry {
       }
     }
 
+    // A provider that lists this exact id wins over reading the id's first
+    // segment as a provider name. "nvidia/nemotron-3-super:free" is a model
+    // Fastrouter offers, and it is also parseable as the NVIDIA provider plus
+    // "nemotron-3-super:free"; taking the second reading rewrites the outgoing
+    // model to an id the addressed provider does not have, and it answers 400.
+    const exactSelectorMatches = this.providerModelMatches(normalized, false);
+    if (exactSelectorMatches.length === 1) {
+      return providerModelRef(exactSelectorMatches[0].provider, exactSelectorMatches[0].model, normalized);
+    }
+
     const parsed = parseProviderModelSelector(normalized);
     if (parsed) {
       const provider = this.findProvider(parsed.provider);
