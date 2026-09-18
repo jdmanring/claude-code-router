@@ -1046,3 +1046,36 @@ function useTemporaryCodexHome(t, prefix) {
   });
   return home;
 }
+
+test("a 400 that says the provider cannot route the model does not mark the protocol supported", () => {
+  // Measured against Fastrouter on 2026-09-18: /api/v1/messages exists and
+  // answers this for a model /chat/completions serves, so detection recorded
+  // anthropic_messages and every routed request to that provider then failed.
+  const message = "There is no available model provider that meets your routing requirements";
+
+  assert.equal(
+    isProviderProtocolEndpointSupportedForProbe(400, message, "anthropic_messages", []),
+    false
+  );
+});
+
+test("an ordinary 400 still marks the protocol supported", () => {
+  // The control for the rule above: a route that exists and rejects the probe
+  // body is exactly what a 400 normally means, and must keep counting as
+  // supported or detection stops finding real endpoints.
+  assert.equal(
+    isProviderProtocolEndpointSupportedForProbe(400, "Field required (parameter: model)", "openai_chat_completions", []),
+    true
+  );
+  assert.equal(
+    isProviderProtocolEndpointSupportedForProbe(400, "Invalid request body", "anthropic_messages", []),
+    true
+  );
+});
+
+test("a 400 naming an unknown route still does not mark the protocol supported", () => {
+  assert.equal(
+    isProviderProtocolEndpointSupportedForProbe(400, "unknown route /v1/messages", "anthropic_messages", []),
+    false
+  );
+});
