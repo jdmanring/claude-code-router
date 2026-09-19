@@ -258,6 +258,16 @@ of those two faults surfacing as the provider's own error. And the configured mo
 is often the paid one while the provider's catalogue lists free siblings that
 answer 200 on the same key with no balance.
 
+`node scripts/provider-sweep.mjs` is the instrument. It judges each provider on
+its own chain attempt rather than on what the client finally received, and it
+separates a reading that says nothing yet from the provider's own answer: 429,
+502, 503, 504, a transport error, a cooled-down skip and a lost log row are
+retried over widening passes, while any other status is terminal on the first
+reading. Six providers here were called dead on a single pass that passed again
+minutes later, so a one-pass number is not worth quoting. The retryable split is
+taken from the awesome-free-byok-models verifier (`scripts/verify.py` there),
+which had solved it already.
+
 A sweep tries a provider's first configured model and nothing else, so one
 moved, withdrawn or quota-spent lead model reads as the whole provider being
 down. Probe the entire configured list one model at a time before concluding:
