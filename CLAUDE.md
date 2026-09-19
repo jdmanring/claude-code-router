@@ -265,6 +265,24 @@ Read silence carefully. A log written before the column carries no inbound
 shape, and an unreadable upstream body leaves nothing to compare, so both are
 reported as no reading rather than as a clean result.
 
+**Caching is a dialect this gateway does not yet translate.** Providers split
+into those that match a prefix on their own (OpenAI, DeepSeek, Grok, Moonshot,
+Groq, Z.AI, Gemini 2.5 and newer) and those that cache only when the request
+carries a marker (Anthropic, Alibaba Qwen). Both peer gateways translate that
+marker between protocol families rather than passing it along: OpenRouter turns
+an Anthropic `cache_control` block into a `prompt_cache_breakpoint` for an
+OpenAI target, and LiteLLM maps it onto Bedrock's `cachePoint` and Google's
+context caching. This fork translates model ids and protocols already and
+leaves the cache marker untranslated, which is why every provider reading
+cached tokens here is on the implicit side.
+
+A marker that is present and ineffective looks exactly like one that worked: a
+prompt below a provider's minimum cacheable length is processed without caching
+and without an error. Verify any change here by reading `cache_read_tokens`
+before and against after, never by the request being accepted.
+`docs/notes/prompt-caching-landscape-2026-09-19.md` carries the specifications
+and the ranked options.
+
 ## Model slots, subagents, and what they cost
 
 A CCR-launched Claude Code session gets four model aliases from its profile,
