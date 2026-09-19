@@ -1096,3 +1096,87 @@ Nine providers out of fifty-four. The sweep now writes its ledger per provider
 rather than at the end, and the discipline is recorded in CLAUDE.md: scope with
 the provider names, redirect to a file, and state the request count before
 launching.
+
+## Model picks, measured
+
+`scripts/model-probe.mjs` asks four task shapes: following an output
+constraint, reasoning about a trick premise, reading code semantics, and
+respecting a length limit. One request per model per task.
+
+Literouter, 50 requests a day, so the most capable that answers:
+
+| Model | constraint | reasoning | code | length | |
+| --- | --- | --- | --- | --- | --- |
+| `deepseek-v3.2:free` | pass | fail | pass | pass | 3 of 4 |
+| `mistral-large-3:free` | pass | fail | fail | pass | 2 of 4 |
+| `glm-5.2:free` | fail | pass | fail | fail | 1 of 4 |
+
+A one-task margin. `glm-5.2:free` returned one or two words on three of the
+four tasks against a 300-token ceiling; the probe reads only message content,
+so whether reasoning tokens consumed the budget is inference, not a reading.
+
+Mistral, where a code-shaped question had chosen the wrong model:
+
+| Model | constraint | reasoning | code | length | |
+| --- | --- | --- | --- | --- | --- |
+| `mistral-medium-latest` | pass | fail | fail | pass | 2 of 4 |
+| `codestral-latest` | fail | fail | pass | fail | 1 of 4 |
+
+Requesty, 200 requests a day:
+
+| Model | | |
+| --- | --- | --- |
+| `nvidia/nemotron-3-super-120b-a12b` | 3 of 4 | clean output |
+| `nvidia/nemotron-3-ultra-550b-a55b` | 2 of 4 | |
+| `google/gemma-4-31b-it` | 1 of 4 | three empty answers |
+| `nvidia/nemotron-3.5-lightning-30b-a3b` | 2 of 3 | prefixes every answer with "Here's a thinking process:" |
+
+Huggingface: `zai-org/GLM-5.3-Flash:zai-org` 2 of 4 against 0 of 4 for the
+finance-tuned `inclusionAI/Ling-3.0-flash-Fin:novita` that was configured.
+
+EvolveX `free-nemotron`, `free-glm-air` and `free-step-flash`: HTTP 522 on
+three attempts across forty minutes. Kilo `z-ai/glm-5.2:free`: 429 on both.
+
+## What the consolidation cost and what it nearly cost
+
+202 configured models became 148 across 54 providers. Cutting the model lists
+alone would have orphaned seventeen chain entries, because a chain names a
+model and several of these providers appear in a chain five times; the edit
+repointed each entry at the kept model and dropped the duplicates that created,
+shortening the sonnet chain from 28 to 25 and the haiku chain from 41 to 36.
+
+Two chain entries could never have answered and were removed: `Meta/...`,
+pointing at a provider deleted from the configuration, and
+`VSLLM/glm-5.2-free`, the withdrawn model that made VSLLM read as dead.
+`config-audit.mjs` now reports both classes on every run, because removing a
+provider is a deliberate change that the baseline is re-taken for, so drift
+detection goes quiet while the entries pointing at it survive.
+
+## The audit of these notes, and what it found in them
+
+An adversarial audit on 2026-09-19 returned 24 findings against the two notes
+written that day and did not sign off.
+
+The worst was a fabricated table cell. `mistral-large-3:free` was scored 1 of 4
+with its fourth task marked "not reached"; the retained probe output shows it
+passed. The row was written from a read taken while the probe was still
+running and never checked against the finished file, and the error ran in the
+direction that made the conclusion look safer. Correcting it turned a two-task
+margin into a one-task margin, which the same note already said does not settle
+anything.
+
+The rest fell into four classes, all worth watching for:
+
+- Counts stated without their class rule, including a script's internal map
+  size written as a property of the configuration ("sixteen providers hold a
+  single model"; 32 did), and a group of providers described as exhausting
+  three categories when two fell outside all of them.
+- Recommendations resting on readings that failed: a free tier offered as the
+  correct pool when all three of its models returned 522, and three candidate
+  models named when one was rate limited, one answered wrongly and one was
+  never probed.
+- Present-tense state in an undated document, which every applied edit then
+  falsified.
+- A defect established for one provider and not swept for siblings: the
+  model-id prefix rule that decided Groq's pick applies equally to two
+  Fastrouter models the same note recommended carrying.
