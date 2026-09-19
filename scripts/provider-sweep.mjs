@@ -50,10 +50,23 @@ const maxLogId = () => new DatabaseSync(logPath, { readOnly: true })
 // else is the provider's own answer and does not improve by asking again.
 const RETRYABLE = new Set([429, 502, 503, 504]);
 
+// True when the answer carries a reply but billed no output, which is how a
+// relay declines without spending a status code on it. Unparseable or absent
+// usage is not evidence either way and reads as output.
+function producedNoOutput(body) {
+  try {
+    const usage = JSON.parse(body)?.usage;
+    return typeof usage?.output_tokens === "number" && usage.output_tokens === 0;
+  } catch {
+    return false;
+  }
+}
+
 async function attempt(target) {
   const before = maxLogId();
   const started = Date.now();
   let client;
+  let clientBody = "";
   try {
     const r = await fetch("http://127.0.0.1:3456/v1/messages", {
       method: "POST",
@@ -64,7 +77,11 @@ async function attempt(target) {
       signal: AbortSignal.timeout(90_000)
     });
     client = `HTTP ${r.status}`;
-    await r.text();
+    // A provider can decline inside a 200 by answering with a message and no
+    // output tokens, which a status-only reading counts as working. AIHubMix
+    // does exactly that to an unfunded account. Keep the body to tell them
+    // apart.
+    clientBody = await r.text();
   } catch (e) {
     return { client: `client-error`, ms: Date.now() - started, ok: false, retryable: true, status: String(e.message).slice(0, 40) };
   }
@@ -85,11 +102,16 @@ async function attempt(target) {
     return { client, ms: Date.now() - started, ok: false, retryable: true, status: "skipped(cooling)" };
   }
   const code = first.outcome?.statusCode;
-  const ok = code !== undefined && code >= 200 && code < 300;
+  let ok = code !== undefined && code >= 200 && code < 300;
+  let status = code === undefined ? String(first.outcome?.fallbackReason ?? "?").slice(0, 34) : String(code);
+  if (ok && producedNoOutput(clientBody)) {
+    ok = false;
+    status = "200 no output";
+  }
   return {
     client, ms: Date.now() - started, ok,
-    retryable: !ok && (code === undefined || RETRYABLE.has(code)),
-    status: code === undefined ? String(first.outcome?.fallbackReason ?? "?").slice(0, 34) : String(code)
+    retryable: !ok && status !== "200 no output" && (code === undefined || RETRYABLE.has(code)),
+    status
   };
 }
 

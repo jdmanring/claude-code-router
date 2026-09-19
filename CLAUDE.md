@@ -333,6 +333,30 @@ Read a 429 from `Codex API` with `getProviderAccountSnapshots` before calling it
 a credential fault, and a 401 as the rotation above rather than a signed-out
 account.
 
+Anthropic publishes the contract this sits on, at
+`https://code.claude.com/docs/en/llm-gateway-protocol`, under "system prompt
+attribution block", and it says a gateway should not be doing what this one
+does. Claude Code prepends an attribution block as the first system block;
+`api.anthropic.com` strips it before processing, but positionally, only when it
+arrives unchanged and first. The document is explicit that prepending another
+system block, reordering the array, or converting it to a single string defeats
+the strip, and that a merged block beginning with the attribution header is
+treated as attribution in its entirety, so everything merged into it is
+dropped, including the rest of the system prompt.
+
+That is a mechanism for the empty 429: a system array flattened into one string
+behind the attribution header loses the whole prompt at the endpoint, the
+request no longer identifies as Claude Code, and an OAuth token scoped to
+Claude Code sessions is refused. It also means the identity block the plugin
+prepends sits ahead of the attribution block and defeats the strip, so the
+attribution line reaches the model and the prompt cache key. The remedy the
+document names for a gateway that must reshape system content is
+`CLAUDE_CODE_ATTRIBUTION_HEADER=0` at the client, not repair in the gateway.
+
+Read that section before treating the identity injection as the fix to offer
+upstream. Forwarding the `system` array unchanged is what the contract asks
+for; the injection restores the 200 without restoring the contract.
+
 `local-plugins/gateway-claude-code-oauth-identity.mjs` predates the core fix and
 does the same thing from the plugin host, which needs no rebuild. Both are
 idempotent. Note that the plugin host loads plugin modules when the gateway
@@ -368,10 +392,11 @@ And the account endpoint is the balance that actually gates a request.
 Its cost is one value CCR cannot discover: most builds reject `/api/user/self`
 unless a `New-Api-User` header carries the caller's numeric console user id,
 and no endpoint reachable with the token returns that id. The response contains
-it once the call succeeds, which is no help beforehand. Builds differ: some do
-not enforce the header at all, and some refuse a Manage Key on every account
-path and want a browser session instead. Probe with the token alone first and
-read which of the three the deployment is.
+it once the call succeeds, which is no help beforehand. Builds differ: some do not
+enforce the header at all, and some refuse the console token on every account
+path with a message that does not change with the credential, which says only
+that the token is the wrong class for that path. Probe with the token alone
+first and read which the deployment is.
 
 ## Config drift
 
