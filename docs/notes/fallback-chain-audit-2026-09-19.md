@@ -19,14 +19,15 @@ Tested by taking each rule's `condition.right` as a prefix of every slot value:
 
 No dead rules.
 
-## The fable slot has no rule and no fallback
+## The fable slot has no rule, deliberately
 
-`fableModel` is `Claude Code API/claude-fable-5-1`, and no rule's condition
-prefixes it. With `Router.rules` empty there is no default chain behind it
-either, so a fable request has exactly one place to go. That provider answers
-429 when its request arrives without the Claude Code identity block, which
-reads as an exhausted plan and is not one, and there is nothing behind it to
-absorb the failure.
+`fableModel` is `Claude Code API/claude-fable-5-1`, no rule's condition
+prefixes it, and `Router.rules` is empty, so a fable request has exactly one
+place to go. That is the intended design and not a defect: nothing else
+configured here can match that model, so any chain behind it could only
+downgrade the answer. A 429 from that provider is better handled by reading
+`getProviderAccountSnapshots`, since the empty 429 usually means the request
+lacked its identity block rather than that the plan is spent.
 
 ## Dead weight, by position
 
@@ -80,8 +81,18 @@ none of them can answer a request from Claude Code.
 
 ## Configured and never routed to
 
-Go, Pooled, Poolside, Tokeness and Mistral Vibe appear in no chain and in no
-slot. Go is the paid OpenCode lane, so it is being paid for and never reached.
+`Go` and `OpenCode Go Responses` are one account reached two ways. Both carry
+the base url `https://opencode.ai/zen/go/v1`; they are split by protocol,
+`openai_chat_completions` and `openai_responses`, because the models divide
+along that line. The Sonnet rule rewrites to
+`OpenCode Go Responses/muse-spark-1.3-contributor` and lists it as chain entry
+one, so the subscription is exercised on every sonnet turn.
+
+What is unrouted is the eight chat-completions models on the `Go` provider,
+not the account. Reading the provider name alone gives the opposite and wrong
+impression, which is what happened when this note was first written.
+
+Pooled, Poolside, Tokeness and Mistral Vibe appear in no chain and in no slot.
 AIHubMix is also unrouted, which matters less because nothing of it answers.
 
 Ollama appears in no chain but is the `model` and `opusModel` slot value, so it
