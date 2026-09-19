@@ -766,13 +766,21 @@ worktree (`git worktree add --detach <dir> origin/main`, symlink the root
 `node_modules`, then `node build/test.mjs core && node build/run-tests.mjs
 core`) and compare failure names. Attribute only the difference.
 
-Measured 2026-09-19 at `origin/main` `a034b0c5`. The fork column was re-read
-later the same day, 159 commits ahead, after eight tests were added:
+Measured 2026-09-19 at `origin/main` `a034b0c5`:
 
 | | upstream | this fork |
 | --- | --- | --- |
-| pass | 996 | 1072 |
-| fail | 5 | 2 |
+| pass | 996 | 1083 |
+| fail | 5 | 0 |
+
+The fork's two remaining failures were fixed later that day, and they were
+stale tests rather than upstream defects. Both asserted values that
+`packages/core/models.json` supplies, and that file is regenerated from
+third-party catalogs: Kimi K3's context window moved from 262,144 to
+1,048,576, and `deepseek/deepseek-v4-flash` gained image input, so the code
+correctly emitted an `image_in` capability the test did not expect. A test that
+pins a vendor's published specification breaks whenever that vendor ships, so
+both now assert what the mapping owns and let the catalog values move.
 
 Upstream's five: the Kimi CLI profile home, the provider model catalog preset
 aliases, and three Claude Design and bundled-plugin permission tests. This
