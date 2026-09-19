@@ -557,3 +557,49 @@ is published.
 
 Status: `as documented`; `no endpoint`; base url differs from the documented
 host and is worth changing on the next failure.
+
+### MegaNova - wired, from a platform API on a different path prefix
+
+Documentation: `docs.meganova.ai`, which publishes an `llms.txt` index. Its
+Platform API includes "Billing: Retrieve the user's current credit balance",
+`GET {API_URL}/users/credits`, bearer authenticated, returning
+`data.available_balance` as a string.
+
+The base url had to be found: inference is on `https://api.meganova.ai/v1`
+while the platform API is on `/api/v1`, so `/v1/users/credits` and
+`/users/credits` both answer 404 and `/api/v1/users/credits` answers 200. The
+ordinary inference key is accepted; no console credential is needed. Reports
+`available_balance` `"0.0000"`. Wired.
+
+Their free quota is also documented properly: granted **per account**, reset
+daily at 00:00 UTC, and tiered per model, with `meganova-ai/manta-mini-1.0` at
+50 on tier 1 and 500 on tier 2. Once exhausted, usage continues on the account's
+billing configuration if the charge switch is on, which is worth knowing before
+leaving it in a fallback chain.
+
+### Kilo - three endpoints, and none of them is a balance
+
+Their documentation is open source, so the reference was read directly:
+`Kilo-Org/kilocode`, `packages/kilo-docs/pages/gateway/api-reference.md`. It
+documents exactly `POST /chat/completions`, `POST /api/fim/completions` and
+`GET /models`. There is no account, credit or usage endpoint. The configured
+base url `https://api.kilo.ai/api/gateway` is the documented one.
+
+Status: `as documented`, `no endpoint`.
+
+### Poolside, SEA-LION, llm7, LLM.kiwi, Auriko - checked, nothing to wire
+
+All five publish documentation and none publishes a consumption endpoint.
+
+- **Poolside**: the documentation is a self-hosted deployment guide (EKS, Helm,
+  model inference charts). There is no consumer account API.
+- **SEA-LION**: index carries no account, billing or usage page.
+- **llm7**: documents limits by plan and nothing to read them from.
+- **LLM.kiwi**: documents free-tier access, per-minute rate limits and token
+  quotas as prose on a limits page; no endpoint.
+- **Auriko**: `GET /api-reference/get-api-key-identity` returns workspace,
+  scopes, profile and rate-limit ceilings. This confirms the earlier reading:
+  it is key metadata, not consumption, so wiring it would report "ok" while
+  showing nothing.
+
+Status for all five: `as documented`, `no endpoint`.
