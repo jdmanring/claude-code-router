@@ -467,6 +467,20 @@ Qualify a candidate on a stored body, never on a short prompt.
 `openai/gpt-oss-20b:free` answers `<block>no` correctly on a toy request and
 returns `finish=length` with empty content on a real one.
 
+**Order this chain by prompt cache behavior rather than by latency.** A 182KB
+classifier request is a 91KB permissions block, 40KB of fixed classifier rules
+and a 38KB CLAUDE.md block against 12.7KB of action under review, so 93 per
+cent of it is byte-identical on every call. Measured from `input_tokens`
+against `cache_read_tokens`: `gemini-3.5-flash-lite` reads 29,570 cached
+tokens and answers in 2,124ms, while `manta-flash-1.0` caches nothing, reads
+28,370 and takes 5,620ms. Caching is also what decides how long a per-model
+daily allowance lasts, which is the mechanism behind MegaNova's exhaustion
+rather than a coincidence of it.
+
+Trimming the prompt is not the lever it appears to be. Of the 91KB permissions
+block, 84KB is `$defaults`; every hand-written `autoMode` rule together is 7KB
+across 25 entries, about 4 per cent of the request.
+
 ## Provider triage
 
 **OVH is anonymous access and takes no API key.** Its empty `api_key` is

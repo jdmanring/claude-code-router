@@ -96,8 +96,8 @@ has never refused a request of this size, and is wrong anywhere earlier.
 
 The resulting chain, every entry measured answering 200 at this body size:
 
-1. `MegaNova/meganova-ai/manta-flash-1.0`
-2. `Google Gemini/gemini-3.5-flash-lite`
+1. `Google Gemini/gemini-3.5-flash-lite`
+2. `MegaNova/meganova-ai/manta-flash-1.0`
 3. `Fastrouter/google/gemma4-26b:free`
 4. `XKIRO/minimax/minimax-m3:free`
 
@@ -168,3 +168,49 @@ was the only thing that caught it during this edit.
 whose value is not the head of its own chain. The second is the convention this
 configuration follows, and a mismatch sends the first attempt to a target the
 chain does not list, which reads as an extra entry nobody configured.
+
+## What the request is actually made of
+
+Ranking providers by success rate and latency treated the request as a fixed
+cost to be placed well. Measuring what is in it shows that most of it does not
+vary at all. One request of 182KB:
+
+| block | size | varies per call |
+| --- | --- | --- |
+| permissions block | 91KB | no |
+| classifier's own rules | 40KB | no |
+| CLAUDE.md block | 38KB | no |
+| the action under review | 12.7KB | yes |
+
+**93 per cent of every call is byte-identical to the last one.** The action
+being judged, which is the whole point of the request, is 7 per cent of it.
+
+Trimming is not the lever it looks like. Of the 91KB permissions block, 84KB is
+`$defaults`; all of the hand-written `autoMode` rules together are 7KB across
+25 entries. Editing them changes about 4 per cent of the request.
+
+## Prompt caching decides the ordering
+
+Since the prefix repeats, whether a provider caches it is worth more than its
+raw speed. Read from `input_tokens` against `cache_read_tokens`:
+
+| model | cached | uncached | latency |
+| --- | --- | --- | --- |
+| `gemini-3.5-flash-lite` | 29,570 | 16,811 | 2,124ms |
+| `manta-flash-1.0` | 0 | 28,370 | 5,620ms |
+| `gemma4` | 0 | 46,057 | 3,599ms |
+
+This also explains the exhausted quota rather than merely coinciding with it.
+MegaNova meters per model per day and caches nothing, so every classifier call
+spends the full prefix again, and the classifier's own volume is enough to
+finish the allowance. Gemini re-reads about a third of what MegaNova does.
+
+Gemini therefore leads on cost and latency together, and the earlier ordering,
+which put MegaNova first on a 50-of-50 success rate, was ranking on the one
+axis that does not bind. A success rate measured while a provider is inside its
+daily allowance says nothing about whether it will still be inside it an hour
+later.
+
+The general form worth keeping: **where a request has a large invariant
+prefix, order the chain by cache behavior, not by latency.** Latency is a
+consequence of the cache hit, and allowance consumption is too.
