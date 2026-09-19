@@ -681,6 +681,18 @@ and the symbol route produced the caller set.
 | Does this compiled artifact match the runtime | `re_verify_claim` against the binary, with a deliberately false control claim |
 | What does the memory graph look like | `python3 ~/.claude/memory_graph.py --check` |
 | Proving a negative | `command grep`; a plain search honors ignore files and under-reports |
+| Is a fix live in the installed bundle | `re_verify_claim` on `dist/main/cli.js` with a string literal, plus one literal known to be present as a control |
+| Does this prose meet the project's standard | `vale --config ~/.claude/styles/vale.ini CLAUDE.md docs/notes/*.md`, before the commit rather than after |
+| Does the memory tree have broken links | `python3 ~/.claude/memory_graph.py --check`. **Not** the Obsidian CLI: it drives a running vault and launches the desktop app when there is none |
+
+The last three are verification rather than retrieval, and that is why they
+get skipped. The pattern worth naming: the tools that help produce something
+get reached for, and the tools whose only job is to catch the author being
+wrong get left until somebody asks. Measured 2026-09-19, each found something
+on its first run of that session. Vale found British spellings introduced into
+a file that upstream keeps uniformly American, and a claim about which fix was
+live in the installed build turned out to rest on a timestamp when the bytes
+were readable.
 
 Two traps this repository has already sprung. A Serena reference query that
 returns nothing has not proven absence, and its cross-package index does not
