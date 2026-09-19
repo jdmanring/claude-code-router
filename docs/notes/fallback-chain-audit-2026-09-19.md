@@ -1,4 +1,13 @@
-# What the fallback chains actually contain
+# What the fallback chains contained on 2026-09-19
+
+**Every count below is a reading taken before the repairs and the
+consolidation were applied, and none of them survived those edits.** At 04:53
+the chains held 76 entries, not 84: classifier 5, opus 10, sonnet 25, haiku 36.
+The classifier already leads with `Groq/qwen/qwen3.8-27b`, so its first live
+entry is position 1 and the repair this note recommends is done. Kilo and
+Huggingface hold two chain entries each rather than five. The two entries named
+below as unable to answer are both gone. What is durable here is the method and
+the mechanisms; for the numbers, read the config.
 
 Read from `profile.profiles[0].routing.rules`, which is where the chains live;
 `Router.rules` is empty and carries nothing. Four rules, 84 chain entries.
@@ -17,7 +26,11 @@ Tested by taking each rule's `condition.right` as a prefix of every slot value:
 | Sonnet routing | `request.body.model` | `sonnetModel` |
 | Haiku routing | `request.body.model` | `haikuModel`, `smallFastModel` |
 
-No dead rules.
+No dead rules **among the three that match on the model**. The classifier
+matches `contains-deep` against `request.body.system` for the literal "You are
+a security monitor for autonomous AI coding agents", which this test does not
+reach and nothing else here tests, so it is three rules of evidence behind a
+four-rule heading.
 
 ## The fable slot has no rule, deliberately
 
@@ -75,9 +88,18 @@ Zen, Vercel, v0 or Tokenreply.
 | 4 | Zen |
 
 OVH is the most-used provider across all chains and is anonymous shared
-access: a single sweep exhausts its rate limit on its own. Zen's four entries
-refuse every client that is not OpenCode, by the provider's own design, so
-none of them can answer a request from Claude Code.
+access: a single sweep exhausts its rate limit on its own. That is also why
+the dead-weight table above should not be read as settled. It counts all eight
+OVH entries as dead, on the strength of a sweep whose own traffic exhausts the
+limit being measured, and OVH is the largest single contributor to those
+totals. Every "live" count in that table is downstream of a classification the
+instrument cannot make. Zen's entries
+carry free models that refuse every client that is not OpenCode, by the
+provider's own design. One of the four, `Zen/big-pickle`, is not a `-free` id,
+so "none of them can answer" generalises the free-tier refusal past what was
+measured. Note also that Zen holds the **same API key as Go and OpenCode Go
+Responses**: it is the same OpenCode account reached a third way, which this
+note elsewhere treats as an unrelated provider.
 
 ## Configured and never routed to
 

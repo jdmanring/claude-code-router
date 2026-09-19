@@ -22,6 +22,12 @@ Three shapes, and the rule each implies:
 A pure rate limit collapses into the first shape rather than forming a fourth.
 Nothing is being spent, so there is no efficiency to trade for.
 
+**The three tables below record the state read on 2026-09-19 before any of
+this was applied, and their "Models now" columns are wrong from the moment the
+edit lands.** They are kept as the reasoning that produced the picks. For what
+is configured, read the config; `node scripts/config-audit.mjs --show` prints
+it.
+
 ## Requests or a pure rate: one model, the most capable
 
 | Provider | What is metered | Models now | Keep |
@@ -70,12 +76,12 @@ Groq as `gpt-oss-120b`. `qwen/` does not collide. Deliverability decides it.
 
 ## A budget of money or tokens: one model, fewest tokens for the work
 
-| Provider | What is metered | Models now | Keep |
+| Provider | What is metered | Models then | Keep |
 | --- | --- | --- | --- |
-| Huggingface | monthly inference credit | 5 | `inclusionAI/Ling-3.0-flash-Fin:novita` |
+| Huggingface | monthly inference credit | 5 | superseded, see the re-picks below |
 | ZyloAI | 200,000 tokens a day | 3 | `gpt-oss-20b` |
 | XKIRO | 500,000 tokens a day | 2 | `minimax/minimax-m3:free` |
-| VSLLM | one key quota | 2 | `glm-4.7-flash-free` |
+| VSLLM | one key quota | 1 | `glm-4.7-flash-free`, which was **added**, not chosen |
 | Bazaarlink | one credit pool | 4 | `deepseek/deepseek-v4-flash-0731free:free` |
 | Orcarouter | one workspace allowance | 4 | `deepseek/deepseek-v4-flash-free` |
 
@@ -122,8 +128,10 @@ paid lane and is the one worth reading the documentation for first.
 
 ## Incidental findings
 
-- SEA-LION carries `BAAI/bge-m3`, which is an embedding model and cannot answer
-  a chat request at all. It occupies a chain slot and can only fail.
+- SEA-LION carried `BAAI/bge-m3`, an embedding model that cannot answer a chat
+  request. It was a configured model and appeared in **no chain entry**, so the
+  claim made here earlier that it "occupies a chain slot" was wrong: it could
+  only have been reached had a chain named it.
 - XKIRO's block was the stale side, not the configuration. Both configured ids
   are published, and the catalogue carries **no DeepSeek model on the free
   tier at all**: every `deepseek/` id there is paid, so "DeepSeek V4.1 Flash
@@ -134,14 +142,32 @@ paid lane and is the one worth reading the documentation for first.
 - Orcarouter's four models are still marked `[gate]` although the gates section
   records the GitHub link as having opened them. The markers predate the fix.
 - ZyloAI's block lists `kimi-k3` and `step-3.7`, neither configured.
-- VSLLM's block still shows the withdrawn `glm-5.2-free`.
+- VSLLM's block still showed the withdrawn `glm-5.2-free`, which was also its
+  only configured model. `glm-4.7-flash-free` was not in its list at all, so
+  the row above records an addition rather than a selection from what was
+  there. The claim made elsewhere that VSLLM "now carries `glm-4.7-flash-free`
+  and `glm-4.6v-flash-free`, both answering" is not supported by anything
+  retained here: one model is configured, and no probe output covers the other.
 
 ## Applied
 
-The configuration now carries 160 models across 54 providers, down from 202.
-Sixteen providers hold a single model, and the ones still holding several are
-the three groups that should: metered per model, no model answering and left
-as the search space, or an allowance never established.
+Read from stored config on 2026-09-19 at 04:53, after the later re-picks: 148
+models across 54 providers, and 32 providers holding exactly one. The earlier
+figure of 202 was a live reading taken at the start of the session, after two
+providers had been deleted; the session's own snapshots cannot corroborate it,
+because they were `cp` copies of a WAL-mode database and hold an older
+checkpoint. Treat 202 as unsourced.
+
+"Sixteen" appeared here as the size of the consolidation script's map, not as
+a property of the configuration, and the sentence read as though it were a
+config-wide count. It was not.
+
+Nor do the providers still holding several models all fall into the three
+groups named below. **NVIDIA** carries three and **Helixmind** five, and
+neither is metered per model, out of service, or unestablished; they were
+simply never examined. The class rule this section needs is that a provider
+carrying several models has been shown to meter per model, and these two have
+not been shown anything.
 
 Cutting the lists alone would have orphaned seventeen chain entries, because a
 chain names a model rather than a provider and several of these providers
@@ -174,10 +200,19 @@ cost, found three more:
 
 - **EvolveX** was configured with `moonshotai/kimi-k3`, which appears in
   neither its free list nor anywhere a free marker is published. Its free tier
-  is `free-nemotron`, `free-glm-air` and `free-step-flash`.
-- **Kilo** publishes 22 free models, among them
-  `nvidia/nemotron-3-ultra-550b-a55b:free`, `z-ai/glm-5.2:free` and
-  `cohere/north-mini-code:free`, against a configured `nex-agi/nex-n2.5-pro:free`.
+  is `free-nemotron`, `free-glm-air` and `free-step-flash`, and **none of the
+  three answers**: each returned HTTP 522 on three attempts spread over forty
+  minutes, which is its origin being down rather than a refusal. So the free
+  pick cannot be made, `moonshotai/kimi-k3` stays, and whether it spends money
+  is open. Naming that trio as the correct pool without this is the kind of
+  recommendation a reader would act on and find broken.
+- **Kilo** publishes 22 free models against a configured
+  `nex-agi/nex-n2.5-pro:free`. None of the alternatives named here is validated:
+  `z-ai/glm-5.2:free` answered 429 on both attempts, `cohere/north-mini-code:free`
+  answered wrongly, and `nvidia/nemotron-3-ultra-550b-a55b:free` tied with the
+  configured model on the one question both were asked. Kilo's pick was left
+  alone for that reason, and this entry is a list of candidates rather than a
+  finding.
 - **Huggingface** was configured with `inclusionAI/Ling-3.0-flash-Fin:novita`,
   a finance-tuned variant, for general coding work, while the same account
   reaches `zai-org/GLM-5.3-Flash` and `deepseek-ai/DeepSeek-V4.1-Flash`.
@@ -234,8 +269,16 @@ The single-question probe picked `mistral-large-3:free`, a second one picked
 | Model | instruction | reasoning | code | summarise | |
 | --- | --- | --- | --- | --- | --- |
 | `deepseek-v3.2:free` | pass | fail | pass | pass | 3 of 4 |
+| `mistral-large-3:free` | pass | fail | fail | pass | 2 of 4 |
 | `glm-5.2:free` | fail | pass | fail | fail | 1 of 4 |
-| `mistral-large-3:free` | pass | fail | fail | not reached | 1 of 4 |
+
+**That is a one-task margin, and by the standard set out above it does not
+settle anything.** An earlier version of this table scored
+`mistral-large-3:free` at 1 of 4 with its fourth task marked "not reached",
+which was read from the probe output while the probe was still running and
+never checked against the finished file. The correction widens nothing and
+narrows the result: `deepseek-v3.2:free` leads by one task out of four, on one
+reading each, and the pick rests on that.
 
 `glm-5.2:free` returned one or two words on three of the four tasks against a
 300-token ceiling, which reads as reasoning tokens consuming the budget before
@@ -284,3 +327,50 @@ document and the configuration spell ids differently: the block writes
 `Groq/qwen-qwen3.8-27b` where the configuration holds `qwen/qwen3.8-27b`.
 Inserting lines for them would duplicate models already present under another
 spelling, so the mismatch needs a person, not a pass.
+
+## The prefix-strip rule was applied to one provider and not swept
+
+Groq's pick was justified on the gateway stripping a leading segment that
+matches the protocol vendor, so `openai/gpt-oss-120b` addressed on
+`openai_chat_completions` reaches the provider as `gpt-oss-120b`. Having
+established that, the per-model section then recommends carrying every
+Fastrouter model, and **Fastrouter carries `openai/gpt-oss-120b:free` and
+`openai/gpt-oss-20b:free` on the same protocol**. Both are exposed to exactly
+the rule that decided Groq, and neither was flagged. A defect found once is a
+class, and this one was found and not swept.
+
+Neither has been measured through CCR, so this is a lead, not a verdict: the
+rule is measured against a local sink and against Poolside and Tokeness, and
+its application to Groq and Fastrouter is inference from that. Settling it
+means reading the route trace for one request addressed to each.
+
+## Audit provenance
+
+Both notes in this directory were adversarially audited on 2026-09-19 against
+the stored configuration, the retained probe output and the instruments here.
+The audit returned 24 findings and did not sign off. The corrections above are
+its result. What it found, by class:
+
+- **One fabricated table cell.** `mistral-large-3:free` was scored 1 of 4 with
+  its fourth task marked "not reached". The probe output shows it passed that
+  task. The row was written from a read taken while the probe was still
+  running and never checked against the finished file, and the error ran in the
+  direction that made the conclusion look safer than it was.
+- **Counts presented without their class rule**, including a script's internal
+  map size written as a property of the configuration.
+- **Recommendations resting on readings that failed**: a free tier offered as
+  the correct pool when all three of its models returned 522, and three Kilo
+  candidates named when one was rate limited, one answered wrongly and one was
+  never probed.
+- **Present-tense state in an undated document**, which every applied edit
+  then falsified. Both notes now say so at the point where the numbers appear.
+
+**Pricing and catalogue claims in these notes carry no citation**, and several
+of the heaviest conclusions rest on them: Auriko's "$0 plus pay-as-you-go API
+costs" and Requesty's "200 requests per day" were each read once from
+`auriko.ai/pricing` and `requesty.ai/pricing` on 2026-09-19 and not cached.
+Those two pages are the whole support for reclassifying both providers. Catalogue
+counts (Literouter 443 published and 42 free, Kilo 22 free, Fastrouter 200 and
+67, Naga 16, Auriko 197) came from each provider's `GET /models` on the same
+day and are reproducible with `node scripts/model-catalog-audit.mjs`, which
+spends no inference quota. Re-read rather than quoting them.
