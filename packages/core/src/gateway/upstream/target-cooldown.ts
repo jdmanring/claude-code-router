@@ -20,6 +20,26 @@ const maxTargetCooldownMs = 30 * 60_000;
 const maxBackoffShift = 6;
 
 /**
+ * Consecutive failures of any status after which a target is sidelined even
+ * though its status never asked for it.
+ *
+ * `cooldownAfterStatus` cools down only 402 and 429, because other statuses
+ * are request-shaped and a single one must not sideline a provider. That is
+ * right for a single failure and wrong for a streak: measured 2026-09-19 over
+ * a fortnight, OVH returned 403 on 585 consecutive requests and ZyloAI 401 on
+ * 434, and neither was ever sidelined, so every request behind them paid an
+ * attempt. A status explains why a target failed; it does not decide whether
+ * trying again is worth an attempt.
+ *
+ * Three is low enough to catch a dead target within one request of a user
+ * noticing and high enough that a transient 500 or a one-off malformed request
+ * does not sideline a working provider.
+ */
+const failureStreakBeforeCooldown = 3;
+
+const defaultStreakCooldownMs = 60_000;
+
+/**
  * How long to sideline a target, given how many times in a row it has failed.
  *
  * A flat duration makes a chain forget. A target that fails every time was
@@ -38,6 +58,34 @@ const maxBackoffShift = 6;
 export function targetCooldownDurationMs(baseMs: number, failures: number): number {
   const shift = Math.min(Math.max(failures, 1) - 1, maxBackoffShift);
   return Math.min(baseMs * 2 ** shift, maxTargetCooldownMs);
+}
+
+/**
+ * Records that a target failed, and sidelines it when that is warranted.
+ *
+ * `statusCooldownMs` is what the response asked for, which is zero for every
+ * status except 402 and 429. A streak of failures overrides that: the count is
+ * kept for every failure whatever its status, and once it reaches the
+ * threshold the target is sidelined on the default interval and escalates from
+ * there.
+ */
+export function markTargetFailure(target: string | undefined, statusCooldownMs: number): void {
+  if (!target) return;
+  const previous = cooldowns.get(target);
+  const failures = (previous?.failures ?? 0) + 1;
+  const asked = Number.isFinite(statusCooldownMs) && statusCooldownMs > 0 ? statusCooldownMs : 0;
+  const base = asked > 0 ? asked : (failures >= failureStreakBeforeCooldown ? defaultStreakCooldownMs : 0);
+  if (base <= 0) {
+    // Counted but not sidelined: one request-shaped failure is not evidence.
+    cooldowns.set(target, { failures, until: previous?.until ?? 0 });
+    return;
+  }
+  const until = Date.now() + targetCooldownDurationMs(base, failures);
+  if (previous && previous.until >= until) {
+    cooldowns.set(target, { failures, until: previous.until });
+    return;
+  }
+  cooldowns.set(target, { failures, until });
 }
 
 export function markTargetCoolingDown(target: string | undefined, durationMs: number): void {

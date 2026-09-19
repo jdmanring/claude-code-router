@@ -19,7 +19,7 @@ import { resolveGatewayPublicModelId } from "@ccr/core/gateway/features/model-di
 import { activeProviderCredentials, findProviderByPublicOrInternalName, findProviderCredentialBySlug, normalizedProviderCapabilities, parseProviderCredentialInternalName, providerCapabilityForClientProtocol, providerCapabilityInternalName, providerCapabilityNameMatches, providerCredentialInternalName, providerCredentialPriority, providerCredentialRuntimeId, providerCredentialSlug, providerProtocolForClientProtocol, sanitizeHeaderValue } from "@ccr/core/providers/runtime-topology";
 import { delay } from "@ccr/core/gateway/internal/clock";
 import { cooldownAfterStatus, retryDelayAfterNetworkError, retryDelayAfterStatus, shouldFallbackAfterStatus } from "@ccr/core/gateway/upstream/retry-policy";
-import { clearTargetCooldown, markTargetCoolingDown, targetCooldownRemainingMs } from "@ccr/core/gateway/upstream/target-cooldown";
+import { clearTargetCooldown, markTargetFailure, targetCooldownRemainingMs } from "@ccr/core/gateway/upstream/target-cooldown";
 import { ccrRoutedModelHeader } from "@ccr/core/gateway/core-runtime/router-plugin-contract";
 import { claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta, UpstreamRequestError } from "@ccr/core/gateway/internal/shared";
 import type { ApiKeyLimitUsage, ProviderCredentialRoutingTarget, UpstreamAttempt, UpstreamFailedAttempt, UpstreamFetchResult } from "@ccr/core/gateway/internal/shared";
@@ -576,7 +576,7 @@ export async function fetchUpstreamWithFallback(input: {
           statusCode: response.status
         });
         recordProviderCredentialOutcome(input.config, input.method, attempt, response.status, response.headers);
-        markTargetCoolingDown(plannedAttempt.model, cooldownAfterStatus(response.headers, response.status));
+        markTargetFailure(plannedAttempt.model, cooldownAfterStatus(response.headers, response.status));
         // Failed response bodies may never finish. Start cancellation without
         // waiting for upstream cleanup before trying the next provider.
         void cancelResponseBody(response);

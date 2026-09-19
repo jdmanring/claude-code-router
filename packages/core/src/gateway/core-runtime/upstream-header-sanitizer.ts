@@ -242,6 +242,27 @@ export function createGatewayPlugin() {
           url: rewriteUpstreamProviderUrl(input.upstreamRequest.url, input.targetProviderConfig, input.config)
         };
         const apiKey = input.targetProviderConfig?.apikey?.trim();
+        // A provider configured with no key of its own must reach upstream
+        // with no credential at all. The vendored runtime resolves a missing
+        // provider key by falling back to the BEARER ON THE INBOUND REQUEST,
+        // which is this gateway's own API key, and forwards it. A provider
+        // that takes no credential then sees a non-empty token it cannot
+        // verify and refuses the request.
+        //
+        // Measured 2026-09-19 against OVH, which is anonymous and takes no
+        // key: 403 "Forbidden: authentication failed" on 585 consecutive
+        // requests through the chain, while the same model, url and body
+        // answered 200 when called with no authorization header. A deliberately
+        // invalid token reproduces the 403 exactly; an absent header does not.
+        // Only when a provider config was supplied and states no key. An
+        // absent config is not evidence of an anonymous provider, and the
+        // upstream request may already carry a credential resolved elsewhere.
+        if (input.targetProviderConfig !== undefined && !apiKey) {
+          delete upstreamRequest.headers.authorization;
+          delete upstreamRequest.headers.Authorization;
+          delete upstreamRequest.headers["x-api-key"];
+          delete upstreamRequest.headers["api-key"];
+        }
         if (!upstreamRequest.headers["x-opencode-session"]?.trim()) {
           try {
             const url = new URL(upstreamRequest.url);

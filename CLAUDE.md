@@ -419,9 +419,26 @@ It is driven as a subprocess against a throwaway log via `CCR_LOG_DB`.
 
 ## Provider triage
 
-**OVH is anonymous access and takes no API key.** Its empty `api_key` is correct
-and is not the cause of any failure; its 429 is the shared anonymous rate limit,
-which a probe sweep exhausts on its own. Do not go looking for a credential.
+**OVH is anonymous access and takes no API key.** Its empty `api_key` is
+correct and there is no credential to go looking for. What was wrong here for a
+long time is the next inference: that an empty key is therefore harmless.
+
+It is not. The vendored runtime resolves a missing provider key by falling back
+to the bearer on the **inbound** request, which is this gateway's own API key,
+and forwards it upstream. A provider that accepts no credential then receives a
+non-empty token it cannot verify and refuses. Measured 2026-09-19: 403
+"Forbidden: authentication failed" on 585 consecutive requests through the
+chain, while the same model, url and body answered 200 when called with no
+authorization header at all. A deliberately invalid token reproduces the 403
+exactly; an absent header does not.
+
+`upstream-header-sanitizer.ts` now strips `authorization`, `x-api-key` and
+`api-key` when a provider config is present and states no key. Anonymous means
+send nothing, not send an empty credential, and the distinction is worth 585
+requests.
+
+A 429 from OVH is still the shared anonymous rate limit that a probe sweep
+exhausts on its own. A 403 was never that.
 
 Every provider failure repaired here came down to one of four causes, cheapest
 first: a stale model id, a wrong or duplicated base URL (two capabilities of the

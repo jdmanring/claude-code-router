@@ -10,6 +10,7 @@ import test, { beforeEach } from "node:test";
 import {
   clearTargetCooldown,
   markTargetCoolingDown,
+  markTargetFailure,
   resetTargetCooldownsForTest,
   targetCooldownDurationMs,
   targetCooldownRemainingMs
@@ -83,4 +84,43 @@ test("an absent target and a nonsense duration are ignored", () => {
   markTargetCoolingDown("x", 0);
   markTargetCoolingDown("x", Number.NaN);
   assert.equal(targetCooldownRemainingMs("x"), 0);
+});
+
+test("a streak of failures sidelines a target its status never would have", () => {
+  // Measured over a fortnight: OVH returned 403 on 585 consecutive requests
+  // and was never sidelined, because only 402 and 429 ask for a cooldown. A
+  // status explains why a target failed; it does not decide whether trying
+  // again is worth an attempt.
+  const target = "OVH/gpt-oss-120b";
+  markTargetFailure(target, 0);
+  assert.equal(targetCooldownRemainingMs(target), 0, "one 403 must not sideline a provider");
+  markTargetFailure(target, 0);
+  assert.equal(targetCooldownRemainingMs(target), 0, "two is still not evidence");
+  markTargetFailure(target, 0);
+  assert.ok(targetCooldownRemainingMs(target) > 0, "a third consecutive failure should sideline it");
+});
+
+test("the streak keeps escalating once it has started", () => {
+  const target = "ZyloAI/gpt-oss-20b";
+  for (let i = 0; i < 3; i += 1) markTargetFailure(target, 0);
+  const third = targetCooldownRemainingMs(target);
+  markTargetFailure(target, 0);
+  assert.ok(targetCooldownRemainingMs(target) > third, "the fourth failure did not extend the window");
+});
+
+test("answering clears a streak built from unstatused failures", () => {
+  const target = "Zen/big-pickle";
+  for (let i = 0; i < 4; i += 1) markTargetFailure(target, 0);
+  assert.ok(targetCooldownRemainingMs(target) > 0);
+  clearTargetCooldown(target);
+  markTargetFailure(target, 0);
+  assert.equal(targetCooldownRemainingMs(target), 0, "a recovered provider must start its streak again");
+});
+
+test("a status that asks for a cooldown still sidelines on the first failure", () => {
+  // The streak rule must not delay a 429, which is the provider telling us
+  // plainly to wait.
+  const target = "Google Gemini/gemini-3.5-flash-lite";
+  markTargetFailure(target, 60_000);
+  assert.ok(targetCooldownRemainingMs(target) > 0, "a 429 must sideline immediately");
 });
