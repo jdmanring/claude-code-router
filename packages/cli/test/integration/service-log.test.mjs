@@ -93,3 +93,20 @@ test("both generations of the service log are readable only by their owner", () 
     runCli(["stop"]);
   }
 });
+
+test("the daemon's log names the management address without its auth token", () => {
+  // Under `ccr start` this stream is the log. The token authorises the RPC
+  // that returns the whole configuration, provider credentials included, so a
+  // log line carrying it is a working credential for every provider key.
+  // service.json keeps the tokenised address and is written 0o600.
+  const logFile = serviceLogPath();
+  const started = runCli(["start", "--port", PORT, "--no-gateway", "--no-open"]);
+  try {
+    assert.equal(started.status, 0, started.stderr || started.stdout);
+    const contents = readFileSync(logFile, "utf8");
+    assert.match(contents, /CCR web management is running at http/, "the address is not announced at all");
+    assert.ok(!contents.includes("ccr_web_token="), "the auth token reached the service log");
+  } finally {
+    runCli(["stop"]);
+  }
+});

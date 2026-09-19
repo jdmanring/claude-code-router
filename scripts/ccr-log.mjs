@@ -72,6 +72,16 @@ if (traceId) {
   process.exit(0);
 }
 
+// Every listing says what it covers. Rows older than local midnight are
+// deleted on the first write after it, so an empty or short answer is usually
+// the retention window rather than a quiet system, and without this line the
+// two read identically.
+const window = db.prepare("select min(id) lo, max(id) hi, count(*) n, min(created_at) from_at, max(created_at) to_at from request_logs").get();
+console.log(window.n > 0
+  ? `log holds ${window.n} request(s), ids ${window.lo} to ${window.hi}, ${String(window.from_at).slice(0, 19)} to ${String(window.to_at).slice(0, 19)}.`
+    + "\nrows older than local midnight are pruned, so this is today unless the service has not written since."
+  : "the request log is empty. Rows older than local midnight are pruned on the first write after it.");
+
 const rows = db.prepare(`
   select l.id, l.provider, l.status_code, l.ok, l.duration_ms,
          l.response_body_text, t.trace_json
@@ -79,7 +89,7 @@ const rows = db.prepare(`
   ${whereSql} order by l.id desc limit ${Number.isFinite(limit) ? limit : 50}
 `).all().reverse();
 
-if (rows.length === 0) { console.log("No matching requests."); process.exit(0); }
+if (rows.length === 0) { console.log("\nNo requests in the window asked for."); process.exit(0); }
 
 if (has("--errors")) {
   const seen = new Map();

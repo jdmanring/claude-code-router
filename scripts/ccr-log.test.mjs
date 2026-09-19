@@ -22,10 +22,10 @@ after(() => rmSync(dir, { force: true, recursive: true }));
 {
   const db = new DatabaseSync(dbPath);
   db.exec(`create table request_logs (id integer primary key, provider text, status_code integer,
-             ok integer, duration_ms integer, response_body_text text);
+             ok integer, duration_ms integer, response_body_text text, created_at text);
            create table request_route_traces (request_log_id integer, trace_json text);`);
-  db.prepare("insert into request_logs values (?,?,?,?,?,?)")
-    .run(7, "Tokenreply", 200, 1, 1899, "hello");
+  db.prepare("insert into request_logs values (?,?,?,?,?,?,?)")
+    .run(7, "Tokenreply", 200, 1, 1899, "hello", "2026-09-19T07:11:02.000Z");
   db.prepare("insert into request_route_traces values (?,?)").run(7, JSON.stringify({
     hops: [
       { name: "upstream.attempt.outcome", outcome: { error: "bad gateway", statusCode: 502 },
@@ -67,11 +67,15 @@ test("an id that does not exist is an error, not an empty answer", () => {
   assert.match(result.stderr, /Request 999999 not found/);
 });
 
-test("an empty window without a trace request still reports nothing found", () => {
-  // The control: the message the defect produced is correct in its own case.
+test("an empty window reports what the log holds, not just that it found nothing", () => {
+  // Rows older than local midnight are pruned, so an empty answer is usually
+  // the retention window. Without the coverage line it reads as a quiet
+  // system, which is the wrong conclusion and the expensive one.
   const result = run("--since", "999999999");
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /No matching requests/);
+  assert.match(result.stdout, /log holds 1 request\(s\), ids 7 to 7/);
+  assert.match(result.stdout, /pruned/);
+  assert.match(result.stdout, /No requests in the window asked for/);
 });
 
 test("a missing database is refused rather than reported as empty", () => {

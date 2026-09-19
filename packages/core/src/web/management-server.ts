@@ -101,6 +101,8 @@ export type WebManagementServerOptions = {
 };
 
 export type WebManagementServerRuntime = {
+  /** The same address without the auth token, safe to write to a file. */
+  baseUrl: string;
   close: () => Promise<void>;
   server: Server;
   url: string;
@@ -158,11 +160,13 @@ export async function startWebManagementServer(options: WebManagementServerOptio
   }
   if (options.open) {
     await openSystemExternal(url).catch((error) => {
-      console.warn(`[web] Failed to open ${url}: ${formatError(error)}`);
+      // baseUrl, not url: this line reaches the service log.
+      console.warn(`[web] Failed to open ${baseUrl}: ${formatError(error)}`);
     });
   }
 
   return {
+    baseUrl,
     close: async () => {
       await closeServer(server);
       await stopConfiguredServices();

@@ -194,6 +194,14 @@ Fastrouter 400 on `provider::anthropic_messages/...` while both answered 200 on
 not restrict anything; OVH was already manual and still carried three
 capabilities.
 
+**The request log keeps today only.** Rows older than local midnight are
+deleted on the first write after it, so yesterday cannot be examined at all and
+per-attempt history does not exist anywhere. `ccr-log.mjs` prints the id and
+time range it actually holds before any listing, because an empty answer is
+usually the retention window rather than a quiet system and the two otherwise
+read identically. Final outcomes do survive: `usage.sqlite` holds `usage_events`
+back to August with no time-based prune, and nothing here reads it yet.
+
 Read the `provider::protocol/model` triple in `node scripts/ccr-log.mjs --trace
 <id>` before attributing a chain 4xx to a provider, and confirm by calling both
 endpoints directly.

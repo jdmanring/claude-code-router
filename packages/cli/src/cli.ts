@@ -562,7 +562,15 @@ async function runWebServer(options: WebCliOptions): Promise<void> {
       url: runtime.url
     });
   }
-  process.stdout.write(`CCR web management is running at ${runtime.url}\n`);
+  // The token is printed only to a terminal. Under `ccr start` this stream is
+  // the service log, and the token authorises the RPC that returns the whole
+  // configuration, every provider credential included. `service.json` keeps
+  // the tokenised address for programmatic use and is written 0o600.
+  const announced = process.stdout.isTTY ? runtime.url : runtime.baseUrl;
+  process.stdout.write(`CCR web management is running at ${announced}\n`);
+  if (!process.stdout.isTTY) {
+    process.stdout.write("The address carrying the auth token is in service.json, not this log.\n");
+  }
 
   let closing = false;
   let profileLeaseMonitor: NodeJS.Timeout | undefined;
