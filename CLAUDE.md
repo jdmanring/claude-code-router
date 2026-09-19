@@ -310,6 +310,7 @@ column: `for f in scripts/*.test.mjs local-plugins/*.test.mjs; do node --test "$
 | How much of each provider's allowance is left | `scripts/provider-allowance.mjs` | 7 |
 | What did one request actually do | `scripts/ccr-log.mjs` | 9 |
 | Which providers have answered nothing lately | the same, with `--usage` | |
+| What share of a provider's prompt is served from cache | the same, with `--usage` | |
 | Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 14 |
 | Can a model actually serve the Bash classifier | `scripts/classifier-replay.mjs` | 11 |
 
@@ -396,7 +397,14 @@ beside a balance holding 19.79 of 20, and ranking the unreadable one first
 reported that account as unknown.
 
 `ccr-log.mjs --usage` reads `usage.sqlite`, which carries no time-based prune
-and so outlives the request log. It answers the question a sweep is usually
+and so outlives the request log. It reports each provider's cache share
+beside its success rate, because where a chain's requests carry a large
+invariant prefix the two answer different questions and the cache one decides
+both latency and how fast an allowance is spent. A provider reporting no token
+accounting shows `-` rather than 0 per cent: a provider that cached nothing and
+one that counts nothing both present as zero, and only the first is a miss.
+Measured 2026-09-19 over seven days, MegaNova answered 109 of 109 while caching
+nothing, which is why its per-model daily allowance runs out. It answers the question a sweep is usually
 run for, at no cost: measured over fourteen days, OVH answered nothing in 591
 requests while holding more chain entries than any other provider.
 

@@ -125,3 +125,36 @@ test("the slug rule matches the selector this install actually writes", () => {
   assert.equal(providerSlug("Codex API"), "codex-api");
   assert.equal(providerSlug("OVH"), "ovh");
 });
+
+// The cache share is pure judgment and is exported, so it is tested directly
+// rather than through a subprocess.
+const { cacheHitShare } = await import("./ccr-log.mjs");
+
+test("the cache share is taken against the whole prompt, not the uncached part", () => {
+  // Measured 2026-09-19 on a 46K-token classifier request: gemini-3.5-flash-lite
+  // reported 16,811 input and 29,570 cache read. The two do not overlap, so the
+  // prompt is their sum and the share is 64 per cent, not 176 per cent.
+  assert.equal(Math.round(cacheHitShare(16811, 29570) * 100), 64);
+});
+
+test("a provider with no token accounting is no reading, not a cache miss", () => {
+  // A provider that reports nothing and one that cached nothing both present
+  // as zero. Calling the first a miss invents a reading, which is the trap the
+  // allowance meter already has with spent accounts and unreadable connectors.
+  assert.equal(cacheHitShare(0, 0), undefined);
+  assert.equal(cacheHitShare(null, null), undefined);
+  assert.equal(cacheHitShare(undefined, undefined), undefined);
+});
+
+test("a real miss is zero, and is distinguishable from no reading", () => {
+  // The control for the test above: MegaNova answered 109 of 109 while caching
+  // nothing, which is what its zero has to mean.
+  assert.equal(cacheHitShare(28370, 0), 0);
+  assert.notEqual(cacheHitShare(28370, 0), undefined);
+});
+
+test("a fully cached prompt is one, and junk values do not throw", () => {
+  assert.equal(cacheHitShare(0, 1000), 1);
+  assert.equal(cacheHitShare("16811", "29570"), cacheHitShare(16811, 29570));
+  assert.equal(cacheHitShare("nonsense", "nonsense"), undefined);
+});

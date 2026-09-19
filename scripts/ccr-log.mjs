@@ -36,6 +36,26 @@ const dbPath = process.env.CCR_LOG_DB ?? path.join(
  * inventing a display name for a provider that no longer exists would hide
  * that the history predates its removal.
  */
+/**
+ * The share of a provider's prompt it served from cache.
+ *
+ * `input_tokens` counts what was actually read; `cache_read_tokens` counts what
+ * was served from a stored prefix, and the two do not overlap, so the prompt is
+ * their sum. Measured 2026-09-19 against a 46K-token classifier request:
+ * gemini-3.5-flash-lite reported 16,811 input and 29,570 cache read.
+ *
+ * Returns undefined rather than 0 when nothing was read at all. A provider with
+ * no token accounting and one that cached nothing both present as zero, and
+ * calling the first a cache miss invents a reading: the same trap the allowance
+ * meter has, where a spent account and an unreadable connector both read zero.
+ */
+export function cacheHitShare(inputTokens, cacheReadTokens) {
+  const read = Number(inputTokens) || 0;
+  const cached = Number(cacheReadTokens) || 0;
+  const prompt = read + cached;
+  return prompt > 0 ? cached / prompt : undefined;
+}
+
 export function usageProviderKey(provider, displayBySlug) {
   const raw = String(provider ?? "").trim();
   // "unknown" is written literally by the recorder when it cannot attribute a
@@ -118,20 +138,30 @@ function main() {
     const bySlug = new Map(config.map((name) => [providerSlug(name), name]));
     const tally = new Map();
     for (const row of usageDb.prepare(
-      "select provider, status_code from usage_events where created_at >= ?"
+      `select provider, status_code, coalesce(input_tokens, 0) as input_tokens,
+              coalesce(cache_read_tokens, 0) as cache_read_tokens
+       from usage_events where created_at >= ?`
     ).all(since)) {
       const { key, known } = usageProviderKey(row.provider, bySlug);
-      const seen = tally.get(key) ?? { known, ok: 0, total: 0 };
+      const seen = tally.get(key) ?? { cached: 0, known, ok: 0, read: 0, total: 0 };
       seen.total += 1;
+      seen.read += Number(row.input_tokens) || 0;
+      seen.cached += Number(row.cache_read_tokens) || 0;
       if (Number(row.status_code) >= 200 && Number(row.status_code) < 300) seen.ok += 1;
       tally.set(key, seen);
     }
     const rowsOut = [...tally.entries()].sort((a, b) => a[1].ok / a[1].total - b[1].ok / b[1].total || b[1].total - a[1].total);
-    console.log(`outcomes over the last ${days} day(s), by provider, from usage.sqlite\n`);
+    console.log(`outcomes over the last ${days} day(s), by provider, from usage.sqlite`);
+    // Where a chain's requests carry a large invariant prefix, what a provider
+    // caches decides both its latency and how fast its allowance is spent, so
+    // it belongs beside the success rate rather than in a separate report.
+    console.log(`cache is the share of the prompt served from a stored prefix; "-" means no token accounting\n`);
     for (const [name, seen] of rowsOut) {
       const share = ((seen.ok / seen.total) * 100).toFixed(0);
       const note = seen.known ? "" : name === "(unattributed)" ? "  no provider recorded" : "  not in the current config";
-      console.log(`  ${String(share).padStart(3)}%  ${String(seen.ok).padStart(5)}/${String(seen.total).padEnd(6)} ${name}${note}`);
+      const hit = cacheHitShare(seen.read, seen.cached);
+      const cache = hit === undefined ? "    -" : `${String(Math.round(hit * 100)).padStart(3)}%`;
+      console.log(`  ${String(share).padStart(3)}%  ${String(seen.ok).padStart(5)}/${String(seen.total).padEnd(6)} cache ${cache}  ${name}${note}`);
     }
     const dead = rowsOut.filter(([, s]) => s.ok === 0 && s.total >= 10);
     console.log(dead.length > 0
