@@ -10,7 +10,9 @@ import test, { beforeEach } from "node:test";
 import {
   clearTargetCooldown,
   markTargetCoolingDown,
+  isAccountScopedRefusal,
   markTargetFailure,
+  providerScopeOf,
   resetTargetCooldownsForTest,
   targetCooldownDurationMs,
   targetCooldownRemainingMs
@@ -123,4 +125,34 @@ test("a status that asks for a cooldown still sidelines on the first failure", (
   const target = "Google Gemini/gemini-3.5-flash-lite";
   markTargetFailure(target, 60_000);
   assert.ok(targetCooldownRemainingMs(target) > 0, "a 429 must sideline immediately");
+});
+
+test("an account-scoped refusal sidelines every model that provider serves", () => {
+  // OVH burned 70 failed attempts in one hour because its eight chain entries
+  // each held a separate cooldown while sharing one anonymous rate limit, so
+  // every entry had to learn the same refusal independently.
+  const oneModel = "ovh::openai_chat_completions/gpt-oss-120b";
+  const another = "ovh::openai_chat_completions/Qwen3.8-27B";
+  markTargetFailure(providerScopeOf(oneModel), 60_000);
+  assert.ok(targetCooldownRemainingMs(another) > 0, "a sibling model was not covered by the account cooldown");
+});
+
+test("a model-scoped failure does not sideline its siblings", () => {
+  // The control. A withdrawn model must not retire the provider.
+  const oneModel = "naga::openai_chat_completions/withdrawn-model";
+  const sibling = "naga::openai_chat_completions/working-model";
+  for (let i = 0; i < 5; i += 1) markTargetFailure(oneModel, 0);
+  assert.ok(targetCooldownRemainingMs(oneModel) > 0, "the failing model should be sidelined");
+  assert.equal(targetCooldownRemainingMs(sibling), 0, "a sibling model must be unaffected");
+});
+
+test("only account-shaped statuses claim the whole provider", () => {
+  for (const status of [401, 402, 403, 429]) assert.equal(isAccountScopedRefusal(status), true, String(status));
+  for (const status of [400, 404, 500, 503]) assert.equal(isAccountScopedRefusal(status), false, String(status));
+});
+
+test("a selector with no model yields no provider scope", () => {
+  assert.equal(providerScopeOf("bare-selector"), undefined);
+  assert.equal(providerScopeOf(undefined), undefined);
+  assert.equal(providerScopeOf("ovh::openai_chat_completions/m"), "ovh::openai_chat_completions/*");
 });

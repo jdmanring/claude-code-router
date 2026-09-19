@@ -19,7 +19,7 @@ import { resolveGatewayPublicModelId } from "@ccr/core/gateway/features/model-di
 import { activeProviderCredentials, findProviderByPublicOrInternalName, findProviderCredentialBySlug, normalizedProviderCapabilities, parseProviderCredentialInternalName, providerCapabilityForClientProtocol, providerCapabilityInternalName, providerCapabilityNameMatches, providerCredentialInternalName, providerCredentialPriority, providerCredentialRuntimeId, providerCredentialSlug, providerProtocolForClientProtocol, sanitizeHeaderValue } from "@ccr/core/providers/runtime-topology";
 import { delay } from "@ccr/core/gateway/internal/clock";
 import { cooldownAfterStatus, retryDelayAfterNetworkError, retryDelayAfterStatus, shouldFallbackAfterStatus } from "@ccr/core/gateway/upstream/retry-policy";
-import { clearTargetCooldown, markTargetFailure, targetCooldownRemainingMs } from "@ccr/core/gateway/upstream/target-cooldown";
+import { clearTargetCooldown, isAccountScopedRefusal, markTargetFailure, providerScopeOf, targetCooldownRemainingMs } from "@ccr/core/gateway/upstream/target-cooldown";
 import { ccrRoutedModelHeader } from "@ccr/core/gateway/core-runtime/router-plugin-contract";
 import { claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta, UpstreamRequestError } from "@ccr/core/gateway/internal/shared";
 import type { ApiKeyLimitUsage, ProviderCredentialRoutingTarget, UpstreamAttempt, UpstreamFailedAttempt, UpstreamFetchResult } from "@ccr/core/gateway/internal/shared";
@@ -577,6 +577,12 @@ export async function fetchUpstreamWithFallback(input: {
         });
         recordProviderCredentialOutcome(input.config, input.method, attempt, response.status, response.headers);
         markTargetFailure(plannedAttempt.model, cooldownAfterStatus(response.headers, response.status));
+        // An account-scoped refusal applies to every model that provider
+        // serves, so the whole provider is sidelined rather than each of its
+        // chain entries learning the same refusal independently.
+        if (isAccountScopedRefusal(response.status)) {
+          markTargetFailure(providerScopeOf(plannedAttempt.model), cooldownAfterStatus(response.headers, response.status) || 60_000);
+        }
         // Failed response bodies may never finish. Start cancellation without
         // waiting for upstream cleanup before trying the next provider.
         void cancelResponseBody(response);
@@ -603,6 +609,8 @@ export async function fetchUpstreamWithFallback(input: {
 
       if (response.ok) {
         clearTargetCooldown(plannedAttempt.model);
+        // Answering proves the account is usable again, not merely this model.
+        clearTargetCooldown(providerScopeOf(plannedAttempt.model));
       }
 
       return {

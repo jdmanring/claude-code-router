@@ -102,8 +102,37 @@ export function markTargetCoolingDown(target: string | undefined, durationMs: nu
   cooldowns.set(target, { failures, until });
 }
 
+/**
+ * The provider half of a chain selector, which is `provider::protocol/model`.
+ *
+ * A quota is sometimes per model and sometimes per account, and the status
+ * says which. A 404 is about one model; 401, 402, 403 and 429 are about the
+ * account behind every model it serves. Keying only by selector made the
+ * account case invisible: measured 2026-09-19, OVH burned 70 failed attempts
+ * in one hour because its eight chain entries each held a separate cooldown
+ * while sharing one anonymous rate limit, so every entry had to learn the same
+ * refusal independently.
+ */
+export function providerScopeOf(target: string | undefined): string | undefined {
+  if (!target) return undefined;
+  const slash = target.indexOf("/");
+  const scope = slash === -1 ? target : target.slice(0, slash);
+  return scope === target ? undefined : `${scope}/*`;
+}
+
+/** Statuses that describe the account rather than the model addressed. */
+export function isAccountScopedRefusal(statusCode: number): boolean {
+  return statusCode === 401 || statusCode === 402 || statusCode === 403 || statusCode === 429;
+}
+
 export function targetCooldownRemainingMs(target: string | undefined): number {
   if (!target) return 0;
+  // A cooldown earned by the account applies to every model it serves.
+  const scope = providerScopeOf(target);
+  if (scope) {
+    const scoped = cooldowns.get(scope);
+    if (scoped && scoped.until > Date.now()) return scoped.until - Date.now();
+  }
   const entry = cooldowns.get(target);
   if (entry === undefined) return 0;
   const now = Date.now();
