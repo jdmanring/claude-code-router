@@ -712,3 +712,37 @@ be removed in fastify@6`. The string appears in
 is the vendored runtime's call, not ours. It works today and is a warning, not
 a fault, but a fastify 6 bump will break that runtime until the vendor moves to
 `logController`.
+
+## The nine unlisted model ids, resolved by calling each one
+
+The catalogue audit reported nine ids configured but absent from their
+provider's `/models`. Each was called directly rather than removed on the
+catalogue's word, and **six of the nine answer**:
+
+| Id | Result |
+| --- | --- |
+| Huggingface, all five (`inclusionAI/Ling-3.0-flash-Fin:novita`, `-VL:novita`, `zai-org/GLM-5.3-Flash:zai-org`, `-BF16:zai-org`, `CohereLabs/command-a-reasoning-08-2025:cohere`) | 200, real output tokens |
+| Z.ai `glm-4.7-flash` | 200, established earlier |
+| AIHubMix `gemini-3.7-flash-free` | 404 `model_not_found`, genuinely withdrawn |
+| VSLLM `glm-5.2-free` | 503 "No available channel for model glm-5.2-free under group free" |
+| Tokeness `glm-5.3-free` | 400 "Failed to get available channel" |
+
+That is the calibration earning itself: treating the catalogue as a removal
+list would have deleted six working models, five of them Hugging Face routing
+aliases that the router simply does not enumerate.
+
+Three repairs, each made only after the id was called:
+
+- **AIHubMix**: dropped the withdrawn id, four models remain.
+- **Tokeness**: dropped the dead id; its sibling `tokeness/free` answers.
+- **VSLLM was not dead, its configuration was.** Its single configured model
+  was the 503 above, so the provider was unusable. Both ids it publishes,
+  `glm-4.7-flash-free` and `glm-4.6v-flash-free`, answer 200, so it now carries
+  those and the sweep reads it **OK** for the first time.
+
+One observation left deliberately unacted on: that VSLLM 503 is permanent, and
+the sweep classifies every 503 as retryable, so it retried a condition that
+could never clear. The retry split is status-based by design, borrowed from the
+awesome-free-byok-models verifier. One counter-example is not enough to start
+reading bodies for it; if a second provider produces a terminal 5xx, that is
+the point to revisit.
