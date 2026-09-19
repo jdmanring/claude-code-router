@@ -179,6 +179,35 @@ Three things about the plugin API that are not discoverable from the types:
   and that URL carries the web auth token. Running `ccr serve --no-open` in the
   foreground is no longer needed to see plugin diagnostics.
 
+## Protocol conversion drops protocol-specific features
+
+The vendored child converts between protocol families, and
+`canPassthroughWithoutProtocolConversion` in its `gateway/handler.ts` forwards
+a request untouched only when the source and target are the same family:
+`if (sourceProvider !== targetProvider) return false`, with Anthropic falling
+through to `return true` because only gemini and openai are branched. Claude
+Code speaks `anthropic_messages` to 3456, so a route to any other family is
+rebuilt in that family's shape.
+
+Anything the source protocol carries and the target does not has nowhere to go
+in that rebuild. That is what conversion means, not a defect to repair, and it
+sets a hard limit on what this fork can pass through.
+
+The worked example is Anthropic's server-side classifier checks, which travel
+as a `safeguards` request field and a `safeguard_results` field on streaming
+events, and which are free where Anthropic performs them. Two conditions have
+to hold: the field must survive the gateway, and something must perform the
+check. Seventeen of the configured providers carry an `anthropic_messages`
+capability and so satisfy the first. Exactly one, `Claude Code API`, points at
+`https://api.anthropic.com` and can satisfy the second; the rest speak the
+protocol without being Anthropic, so they accept the field and return nothing.
+
+The consequence generalizes. A session routed across free providers cannot
+also receive an Anthropic-performed check, because Anthropic never sees the
+request. Read a notice about ineligibility as a statement about which provider
+answered, not as a fault in the gateway. `CLAUDE_CODE_AUTO_MODE_SERVER=0`
+silences the notice and changes no billing.
+
 ## Provider protocol selection
 
 The router picks the upstream protocol from a provider's **`capabilities` list**,
