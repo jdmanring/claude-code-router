@@ -365,6 +365,27 @@ a `saveConfig` whose content is unchanged does not restart it: use
 `restartGateway`. DEFER(once the installed dist is rebuilt from this tree):
 drop the local plugin and let `withClaudeCodeIdentity` carry it alone.
 
+## Read the provider's own documentation before probing it
+
+Before sending a single request to an endpoint this repository has not used
+before, find the provider's API documentation and read it. Every provider here
+publishes it, and it names the route group, the credential class and the header
+the credential belongs in. Guessing those costs requests against someone's
+account and produces traffic that is shaped exactly like enumeration: a
+credential tried against six header forms on three hosts is what an attacker
+does, and the account being probed belongs to the person this work is for.
+
+Measured 2026-09-19 on Tokenrouter. Six header shapes and two endpoint families
+were tried against `/api/user/self` and `/api/usage/token/` on the assumption
+that the deployment was vanilla new-api, and every one was refused. The account
+API is a separate route group, `/api/management/*`, taking the Management Key
+as a bearer token, documented at
+`https://www.tokenrouter.com/docs/management-api-documentation`. The first call
+made after reading that page returned the wallet.
+
+A refusal is not a reason to vary the header and try again. It is a reason to
+go and read what the header should have been.
+
 ## Usage tracking
 
 A provider reports usage only when its config carries an `account` block; a
