@@ -7,6 +7,7 @@ import {
   markGatewayRequestLogDropped,
   recordGatewayRequestLog
 } from "@ccr/core/observability/request-log-store";
+import { jsonFieldPaths } from "@ccr/core/observability/request-field-shape";
 import { requestLogRequestedModel, requestLogResponseModel } from "@ccr/core/observability/request-log-model";
 import { recordGatewayUsageCapture, type UsageCaptureInput } from "@ccr/core/usage/store";
 import { ClaudeCodeRouterPlugin, type ClaudeCodeRouteDecision } from "@ccr/core/gateway/claude-code-router-plugin";
@@ -329,6 +330,11 @@ export class GatewayRequestPipeline {
           // Assigned when the route is decided, which happens before this
           // closure runs on response finish.
           ...(routedSessionId ? { sessionId: routedSessionId } : {}),
+          // `requestBody` below is what went upstream. This is what arrived,
+          // recorded as key paths so a field the gateway dropped between the
+          // two can be seen. It is taken from `requestBody` rather than
+          // `bodyToForward`, which already carries this layer's own rewrites.
+          ingressFieldPaths: shouldSendBody(method) ? jsonFieldPaths(requestBody) : [],
           requestBody: shouldSendBody(method) ? bodyToForward ?? Buffer.alloc(0) : Buffer.alloc(0),
           requestHeaders: headers,
           requestId,

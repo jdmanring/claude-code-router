@@ -10,10 +10,83 @@
 //                                            per-provider outcomes from
 //                                            usage.sqlite, which is not pruned
 //                                            and so outlives the request log
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+
+
+// The field-shape logic lives in core, which uses path aliases only the build
+// resolves, so one re-export is bundled on first use and reused after. Same
+// arrangement as provider-allowance.mjs, and for the same reason: a second
+// copy here would drift from the one that writes the column.
+function fieldShapeBundle() {
+  const configured = process.env.CCR_FIELD_SHAPE_API;
+  if (configured) return path.resolve(configured);
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const cache = path.join(repoRoot, "node_modules", ".cache");
+  const bundle = path.join(cache, "ccr-field-shape.cjs");
+  const source = path.join(repoRoot, "packages", "core", "src", "observability", "request-field-shape.ts");
+  if (!existsSync(source)) return undefined;
+  if (existsSync(bundle) && statSync(bundle).mtimeMs >= statSync(source).mtimeMs) return bundle;
+  mkdirSync(cache, { recursive: true });
+  const entry = path.join(cache, "ccr-field-shape-entry.ts");
+  writeFileSync(entry, 'export { decodeFieldPaths, droppedFieldPaths, jsonFieldPaths } from "@ccr/core/observability/request-field-shape";\n');
+  execFileSync(path.join(repoRoot, "node_modules", ".bin", "esbuild"), [
+    entry, "--bundle", "--platform=node", "--format=cjs", `--outfile=${bundle}`,
+    "--log-level=error", `--alias:@ccr/core=${path.join(repoRoot, "packages", "core", "src")}`
+  ], { cwd: repoRoot, stdio: ["ignore", "ignore", "inherit"] });
+  return bundle;
+}
+
+
+/**
+ * Fields the client sent that did not reach the provider.
+ *
+ * The stored body is the one sent upstream, so this is the only way to see a
+ * field the gateway dropped. Silence here means the two shapes agree or one of
+ * them was not recorded, never that the client sent nothing: rows written
+ * before the column existed carry no inbound shape, and a body capture that is
+ * off leaves no upstream side to compare.
+ */
+function reportDroppedFields(row) {
+  const bundle = fieldShapeBundle();
+  if (!bundle) return;
+  let api;
+  // The bundle is CJS, so it is required rather than imported: this reporter
+  // runs inside a synchronous path and making that path async to load it would
+  // reshape the caller for no gain.
+  try { api = createRequire(import.meta.url)(bundle); } catch { return; }
+  const inbound = api.decodeFieldPaths(row.ingress_field_paths);
+  if (inbound.length === 0) {
+    // Distinguish a log that cannot carry the reading from a request that
+    // happened not to produce one, because the two look identical here.
+    console.log(row.ingress_field_paths === undefined
+      ? "\n  inbound shape: this log predates the column, so nothing was recorded"
+      : "\n  inbound shape: not recorded for this request");
+    return;
+  }
+  // The preview column elides the middle and is not JSON, so the full body is
+  // read from the body store when there is a ref for it.
+  let upstreamText = row.request_body_text ?? "";
+  const ref = String(row.request_body_ref ?? "");
+  if (/^[0-9a-f-]{8,}$/i.test(ref)) {
+    const file = path.join(path.dirname(dbPath), "request-log-bodies", ref.slice(0, 2), ref);
+    if (existsSync(file)) upstreamText = readFileSync(file, "utf8");
+  }
+  const upstream = api.jsonFieldPaths(upstreamText);
+  if (upstream.length === 0) {
+    console.log("\n  upstream shape: not readable, so nothing can be compared");
+    return;
+  }
+  const dropped = api.droppedFieldPaths(inbound, upstream);
+  console.log(`\n  inbound carried ${inbound.length} field path(s); ${dropped.length} did not reach the provider`);
+  for (const field of dropped.slice(0, 20)) console.log(`    dropped: ${field}`);
+  if (dropped.length > 20) console.log(`    ... and ${dropped.length - 20} more`);
+}
 
 const dbPath = process.env.CCR_LOG_DB ?? path.join(
   process.env.CCR_INTERNAL_APP_DATA_DIR ?? path.join(homedir(), ".claude-code-router", "app-data"),
@@ -172,7 +245,17 @@ function main() {
 
   const traceId = arg("--trace");
   if (traceId) {
-    const row = db.prepare(`select l.id,l.status_code,l.duration_ms,l.response_body_text,t.trace_json
+    // A log written by an older build carries fewer columns, and naming one it
+    // does not have fails the whole query rather than the one field. The
+    // optional columns are selected only where the schema carries them, so the
+    // trace still prints against any log this script may be pointed at.
+    const present = new Set(db.prepare("PRAGMA table_info(request_logs)").all().map((c) => c.name));
+    const optional = ["ingress_field_paths", "request_body_ref", "request_body_text"]
+      .filter((name) => present.has(name))
+      .map((name) => `l.${name},`)
+      .join("");
+    const row = db.prepare(`select l.id,l.status_code,l.duration_ms,l.response_body_text,${optional}
+                            t.trace_json
                             from request_logs l left join request_route_traces t on t.request_log_id=l.id
                             where l.id=?`).get(Number(traceId));
     if (!row) { console.error(`Request ${traceId} not found.`); process.exit(1); }
@@ -184,6 +267,7 @@ function main() {
       const wait = a.delayMs > 0 ? `  waited ${a.delayMs}ms` : "";
       console.log(`  ${String(i + 1).padStart(2)}. ${label}${wait}${a.error ? `  ${a.error}` : ""}`);
     }
+    reportDroppedFields(row);
     if (row.response_body_text) console.log(`\n  body: ${row.response_body_text.slice(0, 500)}`);
     process.exit(0);
   }

@@ -158,3 +158,64 @@ test("a fully cached prompt is one, and junk values do not throw", () => {
   assert.equal(cacheHitShare("16811", "29570"), cacheHitShare(16811, 29570));
   assert.equal(cacheHitShare("nonsense", "nonsense"), undefined);
 });
+
+// A second throwaway log, this one carrying the inbound-shape column, so the
+// dropped-field report can be driven end to end. Kept separate from the log
+// above, which deliberately predates the column and pins that path.
+const shapeDbPath = path.join(dir, "request-logs-shape.sqlite");
+{
+  const db = new DatabaseSync(shapeDbPath);
+  db.exec(`create table request_logs (id integer primary key, provider text, status_code integer,
+             ok integer, duration_ms integer, response_body_text text, created_at text,
+             ingress_field_paths text, request_body_ref text, request_body_text text);
+           create table request_route_traces (request_log_id integer, trace_json text);`);
+  // The client sent a cache marker; the body that reached the provider has no
+  // trace of it. That is the exact shape of the question this column exists
+  // to answer.
+  const inbound = ["messages", "messages[].role", "model", "system", "system[].cache_control",
+    "system[].cache_control.type", "system[].text", "system[].type"].join("\n");
+  const upstream = JSON.stringify({
+    messages: [{ role: "user" }],
+    model: "m",
+    system: [{ text: "t", type: "text" }]
+  });
+  db.prepare("insert into request_logs values (?,?,?,?,?,?,?,?,?,?)")
+    .run(11, "Kilo", 200, 1, 100, "ok", "2026-09-19T07:11:02.000Z", inbound, "", upstream);
+  // A second row whose inbound shape was never recorded, to pin the quiet path.
+  db.prepare("insert into request_logs values (?,?,?,?,?,?,?,?,?,?)")
+    .run(12, "Kilo", 200, 1, 100, "ok", "2026-09-19T07:11:03.000Z", "", "", upstream);
+  db.close();
+}
+
+const runShape = (...args) => spawnSync(process.execPath, [script, ...args], {
+  encoding: "utf8", env: { ...process.env, CCR_LOG_DB: shapeDbPath }
+});
+
+test("a field the client sent that never reached the provider is named", () => {
+  const result = runShape("--trace", "11");
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /dropped: system\[\]\.cache_control\.type/);
+  assert.match(result.stdout, /2 did not reach the provider/);
+});
+
+test("a field that did survive is not reported as dropped", () => {
+  // The control. Without it a reporter that named every inbound path would
+  // pass the test above.
+  const result = runShape("--trace", "11");
+  assert.doesNotMatch(result.stdout, /dropped: model/);
+  assert.doesNotMatch(result.stdout, /dropped: system\[\]\.text/);
+});
+
+test("a request with no recorded inbound shape says so instead of reporting a loss", () => {
+  const result = runShape("--trace", "12");
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /not recorded for this request/);
+  assert.doesNotMatch(result.stdout, /dropped:/);
+});
+
+test("a log predating the column is distinguished from a request without a reading", () => {
+  // These look identical at the call site and mean different things: one is a
+  // log that cannot carry the reading, the other a request that produced none.
+  const result = run("--trace", "7");
+  assert.match(result.stdout, /predates the column/);
+});

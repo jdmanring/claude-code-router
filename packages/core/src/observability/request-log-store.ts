@@ -19,6 +19,7 @@ import {
 import { maxRequestLogBodyBytes, rawTraceHardMaxBodyBytes } from "@ccr/core/observability/request-log-limits";
 import { compactBase64ImagePayloads } from "@ccr/core/observability/request-log-body";
 import { requestLogRequestedModel, requestLogResponseModel } from "@ccr/core/observability/request-log-model";
+import { encodeFieldPaths } from "@ccr/core/observability/request-field-shape";
 import { isSensitiveRequestLogHeaderName } from "@ccr/core/observability/sensitive-headers";
 import { inferGatewayClient } from "@ccr/core/gateway/http/io";
 import type {
@@ -119,6 +120,8 @@ export type RequestLogRecordInput = {
   captureBody?: boolean;
   client?: string;
   sessionId?: string;
+  /** Key paths of the body the client sent, from `jsonFieldPaths`. */
+  ingressFieldPaths?: readonly string[];
   completedAt?: string;
   durationMs: number;
   error?: string;
@@ -686,6 +689,7 @@ export class RequestLogStore {
         event_id,
         client,
         session_id,
+        ingress_field_paths,
         method,
         path,
         url,
@@ -729,7 +733,7 @@ export class RequestLogStore {
         response_body_ref,
         stream_metrics_json,
         error
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     let inserted = false;
@@ -741,6 +745,7 @@ export class RequestLogStore {
         input.eventId ?? "",
         normalizeLabel(input.client, "unknown"),
         input.sessionId ?? "",
+        encodeFieldPaths(input.ingressFieldPaths ?? []),
         input.method,
         input.path,
         input.url,
@@ -4475,6 +4480,12 @@ function ensureRequestLogSchema(database: SqlDatabase): void {
   // that produced it, so per-session cost and per-session behaviour are
   // unanswerable from stored data.
   addColumn("session_id", "TEXT NOT NULL DEFAULT ''");
+  // The key paths of the body the client sent, so a field the gateway dropped
+  // can be seen. The stored body is the one sent upstream, after routing and
+  // after the vendored child converts protocol families, so it cannot answer
+  // that on its own. Shape rather than body: the body store already holds
+  // gigabytes and a second copy would answer a question about which keys exist.
+  addColumn("ingress_field_paths", "TEXT NOT NULL DEFAULT ''");
   addColumn("method", "TEXT NOT NULL DEFAULT ''");
   addColumn("path", "TEXT NOT NULL DEFAULT ''");
   addColumn("url", "TEXT NOT NULL DEFAULT ''");

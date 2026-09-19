@@ -245,6 +245,26 @@ endpoints directly.
 Note that **CCR stores response bodies only for the final answer, never for
 chain attempts**, so a failing fallback leaves a status and no body.
 
+**The stored request body is the one sent upstream, never the one received.**
+It is written after routing and after the vendored child converts protocol
+families, so on its own it cannot distinguish a client that never sent a field
+from a gateway that dropped one. `request_route_traces.ingress_snapshot_json`
+looks like the missing record and is not: every row is the empty string, so a
+search of it returns zero for any field and that zero is a property of the
+column.
+
+`request_logs.ingress_field_paths` records the **key paths** of the body that
+arrived, and `ccr-log.mjs --trace <id>` reports the paths that did not reach
+the provider. Shape rather than body, because the body store already holds
+4.3GB and a second copy would answer a question about which keys exist; the
+paths are about a thousandth of that and carry no values, so they add no
+exposure a body would not. Array indices collapse to `[]`, which is what makes
+two bodies comparable when a conversion changes an array's length.
+
+Read silence carefully. A log written before the column carries no inbound
+shape, and an unreadable upstream body leaves nothing to compare, so both are
+reported as no reading rather than as a clean result.
+
 ## Model slots, subagents, and what they cost
 
 A CCR-launched Claude Code session gets four model aliases from its profile,
@@ -308,7 +328,8 @@ column: `for f in scripts/*.test.mjs local-plugins/*.test.mjs; do node --test "$
 | Does every fallback chain entry name a configured provider and model | the same, reported on every run | |
 | Which candidate model belongs in a slot | `scripts/model-probe.mjs` | 8 |
 | How much of each provider's allowance is left | `scripts/provider-allowance.mjs` | 7 |
-| What did one request actually do | `scripts/ccr-log.mjs` | 9 |
+| What did one request actually do | `scripts/ccr-log.mjs` | 17 |
+| Did the gateway drop a field the client sent | the same, with `--trace <id>` | |
 | Which providers have answered nothing lately | the same, with `--usage` | |
 | What share of a provider's prompt is served from cache | the same, with `--usage` | |
 | Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 14 |
