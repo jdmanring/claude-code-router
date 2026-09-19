@@ -114,5 +114,5 @@ verify the copy by reading a count out of it rather than by its existence.
   429 on both attempts.
 - Whether the two `openai/`-prefixed Fastrouter models survive the id rewrite.
 
-The measurements behind all of this, and the errors made reaching them, are in
-`provider-audit-2026-09-19.md`.
+The measurements behind all of this, and the corrections applied to them, are
+in `provider-audit-2026-09-19.md`.

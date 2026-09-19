@@ -1152,20 +1152,22 @@ pointing at a provider deleted from the configuration, and
 provider is a deliberate change that the baseline is re-taken for, so drift
 detection goes quiet while the entries pointing at it survive.
 
-## The audit of these notes, and what it found in them
+## Corrections applied to these notes, and the classes they belong to
 
 An adversarial audit on 2026-09-19 returned 24 findings against the two notes
-written that day and did not sign off.
+written that day. The corrections are in place; the classes are recorded here
+because each will recur.
 
-The worst was a fabricated table cell. `mistral-large-3:free` was scored 1 of 4
-with its fourth task marked "not reached"; the retained probe output shows it
-passed. The row was written from a read taken while the probe was still
-running and never checked against the finished file, and the error ran in the
-direction that made the conclusion look safer. Correcting it turned a two-task
-margin into a one-task margin, which the same note already said does not settle
-anything.
+**A result table was populated from a probe that had not finished.**
+`mistral-large-3:free` was recorded as 1 of 4 with its fourth task "not
+reached". The retained output shows it passed that task, so the true score is
+2 of 4. The value was taken from the output file while the probe was still
+writing to it and never re-read afterwards. The consequence is the part worth
+keeping: the error moved the margin from one task to two, in the direction
+that made the conclusion look better supported than it was. Read a probe's
+output after the process exits, not while it runs.
 
-The rest fell into four classes, all worth watching for:
+The rest fell into four classes:
 
 - Counts stated without their class rule, including a script's internal map
   size written as a property of the configuration ("sixteen providers hold a
