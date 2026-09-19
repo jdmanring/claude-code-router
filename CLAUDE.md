@@ -242,7 +242,8 @@ the live install, and each has its pure judgement pinned by tests run with
 | --- | --- | --- |
 | Which providers does CCR actually reach, and why not | `scripts/provider-sweep.mjs` | 5 |
 | Does any configured model of a provider answer | the same, with `--all-models` | |
-| Which configured model ids does the provider still publish | `scripts/model-catalog-audit.mjs` | 4 |
+| Which configured model ids does the provider still publish | `scripts/model-catalog-audit.mjs` | 10 |
+| Is a configured model one that cannot answer a chat request at all | the same, reported on every run | |
 | Has anything in the config moved since it was known good | `scripts/config-audit.mjs` | 10 |
 | Does every fallback chain entry name a configured provider and model | the same, reported on every run | |
 | Which candidate model belongs in a slot | `scripts/model-probe.mjs` | 8 |
@@ -301,6 +302,19 @@ pointing at the removed provider stay behind and read as ordinary entries. The
 same holds for a model withdrawn from a provider's list. Measured 2026-09-19:
 with the config matching its baseline on all 429 values, two entries could
 never answer, `Meta/muse-spark-1.3-contributor` and `VSLLM/glm-5.2-free`.
+
+The catalogue audit also reports a configured model whose catalogue says it
+cannot produce a chat completion. An embedding, rerank, moderation,
+transcription or image model configured as a chat model can only ever error,
+and it arrives honestly: a provider lists them in the same `/models` response
+as its chat models, so configuring a provider from its catalogue picks them up.
+SEA-LION carried `BAAI/bge-m3` this way. The check fires **only when the
+catalogue declares the modality**, through `output_modalities`, the
+`text+image->text` form read on its output side, or an explicit type, and never
+infers from the model id: a model wrongly called non-chat gets deleted from a
+working configuration, so an entry that says nothing stays silent. Note that
+this means a provider publishing no modality at all is unchecked rather than
+clean.
 
 `scripts/ccr-log.mjs` has no tests. It reads and prints, and a wrong reading is
 visible immediately, so the gap is deliberate rather than overlooked.
