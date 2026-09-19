@@ -115,7 +115,6 @@
   },
   "overrides": {
     "@types/react": "$@types/react",
-    "fast-uri@3.1.2": "3.1.5",
     "find-my-way@9.6.0": "9.7.0",
     "js-yaml": "$js-yaml",
     "minimatch@10.2.5": {
@@ -126,7 +125,8 @@
     },
     "socks": {
       "ip-address": "10.5.0"
-    }
+    },
+    "fast-uri": "3.1.8"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true
