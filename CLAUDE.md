@@ -244,6 +244,7 @@ the live install, and each has its pure judgement pinned by tests run with
 | Which configured model ids does the provider still publish | `scripts/model-catalog-audit.mjs` | 4 |
 | Has anything in the config moved since it was known good | `scripts/config-audit.mjs` | 6 |
 | What did one request actually do | `scripts/ccr-log.mjs` | none |
+| Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 5 |
 
 Two properties worth keeping. **Importing any of them must not run the job**:
 the imperative part sits behind an `import.meta.url` entrypoint check, because
