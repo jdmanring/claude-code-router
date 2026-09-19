@@ -7,8 +7,25 @@
 // empty header record for every upstream attempt. A response hook inside the
 // child is the one place the real upstream Response is in scope.
 //
-// This stage is deliberately observation only. It writes what it sees to a
-// JSON file and changes no response.
+// MEASURED DEAD on this install, kept as the probe that establishes it.
+//
+// Three hook kinds were tried and none is reached by the traffic here.
+// `responseHooks` and `streamHooks` registered and never fired.
+// `providerHooks.transformResponse` is handed the real upstream Response by
+// the runtime's `applyProviderResponsePlugins`, but that function lives in
+// `src/gateway/openai-json.ts` and is only reached on that adapter path. The
+// decisive reading: on one `Claude Code API` request, with both plugins
+// loaded, the identity plugin logged `transformRequest reached this dispatch
+// path` while this plugin logged nothing. Same request, same host, same
+// provider: the request side of a provider hook runs, the response side is
+// never reached.
+//
+// So the usage figures the OpenAI convention publishes in response headers
+// cannot be read from any extension point this runtime offers here. Changing
+// that needs a change in the vendored runtime, not in this repository.
+//
+// Left present and disabled. Re-enable it to re-test after a runtime upgrade:
+// if a line appears below the registration line, the path has opened.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -55,14 +72,16 @@ export function createGatewayPlugin(context = {}) {
   };
 
   return {
-    responseHooks: [{
-      key: "upstream-usage-headers-response",
-      transformResponse(input) { record("response", input); return undefined; }
-    }],
-    streamHooks: [{
-      key: "upstream-usage-headers-stream",
-      transformResponse(input) { record("stream", input); return undefined; }
-    }]
+    providerHooks: [
+      {
+        key: "upstream-usage-headers",
+        transformResponse(input) {
+          record("provider", input);
+          // Returning the payload unchanged keeps this observation only.
+          return { ok: true, value: input.upstreamPayload };
+        }
+      }
+    ]
   };
 }
 
