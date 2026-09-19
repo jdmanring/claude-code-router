@@ -53,7 +53,7 @@ const RETRYABLE = new Set([429, 502, 503, 504]);
 // True when the answer carries a reply but billed no output, which is how a
 // relay declines without spending a status code on it. Unparseable or absent
 // usage is not evidence either way and reads as output.
-function producedNoOutput(body) {
+export function producedNoOutput(body) {
   try {
     const usage = JSON.parse(body)?.usage;
     return typeof usage?.output_tokens === "number" && usage.output_tokens === 0;
@@ -115,33 +115,42 @@ async function attempt(target) {
   };
 }
 
-const results = new Map();
-let queue = targets;
-for (let pass = 0; pass <= MAX_PASSES && queue.length > 0; pass++) {
-  if (pass > 0) {
-    const wait = Math.round(2000 * 1.5 ** pass);
-    console.log(`\n  retry pass ${pass}: ${queue.length} provider(s), settling ${wait}ms first`);
-    await new Promise((r) => setTimeout(r, wait));
-  }
-  const next = [];
-  for (const target of queue) {
-    const r = await attempt(target);
-    results.set(target.name, { ...target, ...r, passes: pass + 1 });
-    if (!r.ok && r.retryable && pass < MAX_PASSES) {
-      next.push(target);
-      if (pass === 0) console.log(`RETRY ${target.name.padEnd(34)} ${r.status}`);
-      continue;
+// Importing this file must not run a sweep. The test imports it for
+// producedNoOutput alone, and a module body that sends 56 requests on import
+// is a trap for anything that reads it.
+async function main() {
+  const results = new Map();
+  let queue = targets;
+  for (let pass = 0; pass <= MAX_PASSES && queue.length > 0; pass++) {
+    if (pass > 0) {
+      const wait = Math.round(2000 * 1.5 ** pass);
+      console.log(`\n  retry pass ${pass}: ${queue.length} provider(s), settling ${wait}ms first`);
+      await new Promise((r) => setTimeout(r, wait));
     }
-    console.log(`${r.ok ? "OK   " : "FAIL "} ${target.name.padEnd(34)} ${String(r.status).padEnd(18)} ${target.model.slice(0, 40)}`);
+    const next = [];
+    for (const target of queue) {
+      const r = await attempt(target);
+      results.set(target.name, { ...target, ...r, passes: pass + 1 });
+      if (!r.ok && r.retryable && pass < MAX_PASSES) {
+        next.push(target);
+        if (pass === 0) console.log(`RETRY ${target.name.padEnd(34)} ${r.status}`);
+        continue;
+      }
+      console.log(`${r.ok ? "OK   " : "FAIL "} ${target.name.padEnd(34)} ${String(r.status).padEnd(18)} ${target.model.slice(0, 40)}`);
+    }
+    queue = next;
   }
-  queue = next;
+
+  const all = [...results.values()];
+  const ok = all.filter((r) => r.ok);
+  if (OUT) fs.writeFileSync(OUT, JSON.stringify(all, null, 1));
+  console.log(`\nreachable: ${ok.length}/${all.length}`);
+  const recovered = all.filter((r) => r.ok && r.passes > 1);
+  if (recovered.length > 0) {
+    console.log(`recovered on retry (a single pass would have called these dead): ${recovered.map((r) => r.name).join(", ")}`);
+  }
 }
 
-const all = [...results.values()];
-const ok = all.filter((r) => r.ok);
-if (OUT) fs.writeFileSync(OUT, JSON.stringify(all, null, 1));
-console.log(`\nreachable: ${ok.length}/${all.length}`);
-const recovered = all.filter((r) => r.ok && r.passes > 1);
-if (recovered.length > 0) {
-  console.log(`recovered on retry (a single pass would have called these dead): ${recovered.map((r) => r.name).join(", ")}`);
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  await main();
 }

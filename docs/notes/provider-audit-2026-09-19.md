@@ -248,3 +248,47 @@ usage - which is the only usage signal Groq and the rest of the OpenAI
 convention offer - stays out of reach, and writing "no endpoint" against those
 providers is accurate but incomplete.
 
+## Instruments added during this audit
+
+`scripts/model-catalog-audit.mjs` (+ `.test.mjs`, 4 tests). One `GET /models`
+per provider, diffing the configured ids against what the provider publishes.
+No inference, no quota spent, so it is safe to run when a sweep is not. First
+run over 56 providers: 45 clean, 5 carrying unlisted ids (9 in total), 6 whose
+catalogue could not be read.
+
+Unlisted ids found: Huggingface 5 (`inclusionAI/Ling-3.0-flash-Fin:novita`,
+`inclusionAI/Ling-3.0-flash-VL:novita`, `zai-org/GLM-5.3-Flash:zai-org`,
+`CohereLabs/command-a-reasoning-08-2025:cohere`,
+`zai-org/GLM-5.3-Flash-BF16:zai-org`), AIHubMix `gemini-3.7-flash-free`, VSLLM
+`glm-5.2-free`, Tokeness `glm-5.3-free`, Z.ai `glm-4.7-flash`.
+
+**The tool overclaimed on its first run and was corrected.** Z.ai publishes
+eleven ids and `glm-4.7-flash` is not among them, yet that exact model answered
+200 in the sweep the same day. So a provider will serve an id it does not
+publish, and "not listed" is a lead to check rather than a withdrawal. The
+report now says "not listed" and the script carries the Z.ai case as the reason.
+Cross-checking a new tool's output against a measurement already in hand is what
+caught it.
+
+`scripts/provider-sweep.test.mjs` (5 tests) pins `producedNoOutput`, the one
+piece of judgement in the sweep, including the cases where it must **not** fire:
+an unparseable body, an HTML error page, a truncated read and a non-numeric
+token count are not declines. Reporting any of those as a decline would turn a
+transport problem into a provider verdict.
+
+Both scripts had the same defect and it was fixed in both: the module body ran
+the whole job on import, so importing the sweep for one function swept 56
+providers. The imperative run now sits behind an entrypoint check, which is
+what made either testable.
+
+### Zen, after the account change of 2026-09-19
+
+James restricted the Zen key to free models. Measured immediately afterwards,
+the answer is unchanged: `403 FreeTierError`, "OpenCode's free tier can only be
+used from within OpenCode", both through CCR and called directly. The gate is
+client identity, not key permissions, so a key setting cannot move it. Note the
+side effect: with the key limited to free models, the paid lane that previously
+returned a balance error is no longer reachable either, so this closes the only
+door that funding could have opened on this endpoint. The Go lane is a separate
+endpoint and is unaffected.
+
