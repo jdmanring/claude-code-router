@@ -928,3 +928,61 @@ its waste and pay a multi-second write pause; requiring half the file to be
 free bounds the live set that has to be copied. The prune is gated to once a
 day, so the worst case is one bounded pause per day. The reasoning is now in
 the code beside the thresholds, where someone tempted to relax one will read it.
+
+## Sorting the forks properly, and what the stars filter cost
+
+The first survey filtered on stars, which was the wrong signal. Sorting on
+**ahead and behind** is both cheap and correct, and it is what the fork list
+supports directly.
+
+Two free filters come before any compare call. A fork whose `pushed_at` is
+within a minute of its `created_at` has never been pushed to: **2,438 of 3,155
+are pure mirrors**, eliminated without a request. Of the 717 that were pushed,
+last-push date separates the ones whose code can still apply: 148 since
+2026-07-01. Comparing those 148 cost 148 requests and found **34 with
+independent commits**.
+
+Sorted by how far behind they are, the result indicts the first pass:
+
+| behind | ahead | stars | fork |
+| --- | --- | --- | --- |
+| 0 | 3 | 0 | houxianghui |
+| 0 | 1 | 0 | intarweb |
+| 29 | 27 | 0 | a-min-7 |
+| 29 | 26 | 0 | 1056674754 |
+| 52 | 51 | 1 | zhangqinzhong |
+| 56 | 58 | 0 | kolezka/agentic-coding-router |
+| 167 | 1 | 6 | steipete |
+| 588 | 165 | 12 | oakimov |
+
+**Every fork closer to upstream than the ones examined first has zero stars.**
+Stars measure attention, not divergence, and the two most-starred forks are the
+two furthest behind. The right ranking is `behind` ascending, because it is
+`behind` that decides whether a patch applies at all.
+
+The two perfectly current forks turned out to be CI sync automation only. The
+substantive ones are `a-min-7` and `1056674754`, both 29 behind, and
+`kolezka/agentic-coding-router` at 58 ahead, none of which the first pass would
+ever have reached.
+
+### What a-min-7 settled about our own tree
+
+`fix(build): stop the generated config catalog churning on every build` names a
+symptom seen three times today: `claude-code-config-options.json` dirty after
+every build. Their diagnosis is that `generatedAt` sits inside the compared
+payload, so the content comparison can never succeed.
+
+This tree already carries an equivalent fix, and instrumenting it showed the
+comparison **succeeding** (`equal: true`, stripped lengths identical). The dirt
+was not the stamp. The committed artefact was genuinely stale: 6,982 lines
+against 7,036 regenerated, with real wording changes in the published settings
+and environment reference. Restoring it three times threw away a legitimate
+regeneration each time. It is now committed, and a further regeneration leaves
+the tree clean, which is the proof the stamp fix works.
+
+Open leads from these two forks, not yet read:
+`fix(ccr): return 502 instead of a silent 200 on an empty completion`, which is
+the same defect class as the sweep's `200 no output`;
+`fix: hold routed requests through upstream 429s with a rate-limit wait
+budget`; and `fix: inherit preset provider account configs and surface
+unsupported account states`.
