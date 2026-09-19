@@ -118,7 +118,25 @@ Gemini 5.6M, NVIDIA 4.0M, Ollama 1.25M. The vendored runtime's only
 nothing in core sets it; core reads cache token counts for accounting and
 nothing more.
 
-Why no marker is sent is unresolved. The client carries a global cache strategy
+### Why the cause cannot be read from the log
+
+Nothing here records the **inbound** body. `request_logs.request_body_text` and
+the body store both hold what the gateway sent upstream, after routing and any
+protocol conversion, so they cannot distinguish a client that sends no marker
+from a gateway that drops one.
+
+`request_route_traces.ingress_snapshot_json` looks like the missing record and
+is not: all 1,275 rows are the empty string. Searching them for
+`cache_control` returns zero, and that zero is a property of the column rather
+than of the traffic. Confirm it the way it was confirmed here, by asking
+whether any snapshot contains a `system` or `messages` field at all: none
+does.
+
+Closing that gap is the cheap generalization. "Did we drop a field the client
+sent?" is not answerable today for any field, not only this one, and it is the
+question a gateway should be able to answer about itself.
+
+Why no marker is sent is therefore unresolved. The client carries a global cache strategy
 and an error classifier for `cache_control_field`, `unknown field` and
 `cannot be set`, which is the shape of a client that disables the feature when
 a provider rejects it, but no response in the window mentions `cache_control`
