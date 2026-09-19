@@ -383,13 +383,22 @@ Relays built on new-api are the common case here and CCR already knows them.
 `providers/new-api.ts` ships both endpoint shapes, and the UI can generate the
 second: `/api/usage/token/` reads the inference key and reports that key's
 allowance, while `/api/user/self` reads the console Manage Key and reports the
-account balance. Prefer the account one, for two reasons. The key endpoint
-answers 200 on deployments whose keys are marked `unlimited_quota`, where
-granted, used and available are all meaningless, and `newApiKeyUsageMeter`
-deliberately returns no meter for them, so the connector resolves to nothing.
-And the account endpoint is the balance that actually gates a request.
+account balance. Read the key endpoint before reaching for the
+account one, because on these deployments it carries the figure the console
+displays: Tokenreply reported 487023 of 500000 remaining, and its console read
+"$0.97 of $1.00 remaining, 97% left" in the same hour.
 
-Its cost is one value CCR cannot discover: most builds reject `/api/user/self`
+`unlimited_quota` on the key is not a reason to discard those numbers, and
+treating it as one cost this repository a working connector. The flag means the
+key itself imposes no cap, not that nothing was granted; a deployment can set
+it while still tracking an allowance. `newApiKeyUsageMeter` now discards only
+when `total_granted` is also zero, which is the case the flag was meant to
+cover. The installed build predates that, so a connector wired against these
+providers writes its `mapping.meters` out rather than naming the preset
+parser.
+
+The account endpoint is still the one that reports the balance gating a
+request, and its cost is one value CCR cannot discover: most builds reject `/api/user/self`
 unless a `New-Api-User` header carries the caller's numeric console user id,
 and no endpoint reachable with the token returns that id. The response contains
 it once the call succeeds, which is no help beforehand. Builds differ: some do not

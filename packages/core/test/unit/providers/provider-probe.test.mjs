@@ -868,6 +868,31 @@ test("New API key usage parser ignores keys without a dedicated quota", () => {
   assert.match(newApiKeyUsageFallbackMessageForTest(payload), /no dedicated quota/i);
 });
 
+test("New API key usage parser reports an allowance granted to an unlimited key", () => {
+  const payload = {
+    code: true,
+    data: {
+      name: "Exclusive",
+      total_available: 487023,
+      total_granted: 500000,
+      total_used: 12977,
+      unlimited_quota: true
+    },
+    message: "ok"
+  };
+
+  assert.deepEqual(newApiKeyUsageMetersForTest(payload), [{
+    id: "new_api_key_quota",
+    kind: "quota",
+    label: "API key quota",
+    limit: 500000,
+    remaining: 487023,
+    source: "http-json",
+    unit: "quota",
+    used: 12977
+  }]);
+});
+
 test("New API user self parser returns user balance", () => {
   const payload = {
     data: {

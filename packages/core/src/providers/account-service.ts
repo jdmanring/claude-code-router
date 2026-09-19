@@ -1099,7 +1099,15 @@ function newApiKeyUsageMeter(payload: unknown, source: ProviderAccountConnectorS
   const remaining = normalizeNumber(readJsonRecordValue(data, "total_available"));
   const limit = normalizeNumber(readJsonRecordValue(data, "total_granted"));
   const used = normalizeNumber(readJsonRecordValue(data, "total_used"));
-  if (unlimited || (limit === undefined && remaining === undefined && used === undefined)) {
+  if (limit === undefined && remaining === undefined && used === undefined) {
+    return undefined;
+  }
+  // An unlimited key normally reports zeroes that describe nothing. Some
+  // deployments set the flag on the key while still granting it an allowance,
+  // and there the figures are the account's own: one reported 487023 of
+  // 500000 remaining, which is what its console displayed. A granted total
+  // above zero is what separates the two.
+  if (unlimited && !(limit !== undefined && limit > 0)) {
     return undefined;
   }
 
