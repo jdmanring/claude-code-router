@@ -746,3 +746,35 @@ could never clear. The retry split is status-based by design, borrowed from the
 awesome-free-byok-models verifier. One counter-example is not enough to start
 reading bodies for it; if a second provider produces a terminal 5xx, that is
 the point to revisit.
+
+## A shipped fix that may be inert for the same reason
+
+`oakimov/claude-code-router` carries `fix: propagate Retry-After headers from
+provider errors`. Reading our side against it turned up a question about work
+already merged here.
+
+`retry-policy.ts` reads `headers.get("retry-after")` in two places:
+`retryDelayAfterStatus`, which sets the backoff before the next chain attempt,
+and `cooldownAfterStatus`, which decides how long a target is held down. Both
+are handed `response.headers` from `upstream/executor.ts`. But that response is
+the **gateway child's**, and the child answers with its own header set: a
+request through CCR returns `x-gateway-billing-*`, `x-gateway-target-provider`
+and `x-ccr-*`, and nothing of the provider's. `retry-after` is never among
+them, and the only place this repository sets that header is a test helper.
+
+If the child does not forward a provider's `Retry-After` on an error, then both
+functions always fall through to their defaults, and the cooldown work merged
+here is using 60 seconds every time rather than the interval the provider
+asked for.
+
+**Not established**, and the honest reason is that it needs a provider that
+reliably answers 429 *with* a `Retry-After` header while the chain is watched.
+Codex API, the obvious candidate, answered 200 through a fallback on this
+attempt. The measurement to make: point a provider's base url at a local sink
+that returns `429` with `Retry-After: 120`, send one request, and read whether
+`cooldownAfterStatus` receives 120000 or the 60000 default. That is the same
+local-sink technique the repository guide already describes for deciding which
+process opens the upstream connection.
+
+Until then the cooldown is correct in its logic and possibly blind in its
+input, which is worth knowing before anyone tunes it.
