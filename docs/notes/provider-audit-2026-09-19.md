@@ -849,3 +849,54 @@ upstream-header-sanitizer 8 pass.
 **Everything else in the ecosystem was either upstream's work already in this
 tree, or written against an architecture three hundred to eight hundred commits
 old.**
+
+## oakimov: mined for defects, not for code
+
+`oakimov/claude-code-router` is 165 commits ahead and **588 behind**, which puts
+it on the pre-3.x architecture (`transformers/`, `src/api/routes`). Nothing
+cherry-picks. Its value is the list of defects its author hit, since a defect
+often survives a rewrite even when the patch does not, so each was checked
+against **our code** rather than against its commit message.
+
+Of roughly sixty `fix:` commits, six described something that could plausibly
+still exist here. Five do not:
+
+| Their fix | Checked here |
+| --- | --- |
+| `fix(router): stop tiktoken crash...` | `tiktoken` is not a dependency of this tree at all |
+| `fix(ui): replace localStorage API key with HttpOnly session cookies` | our UI keeps only a language preference in `localStorage`; the `${localStorage.token}` occurrences are a documented placeholder for a user's own connector headers, not a key this app stores |
+| `fix(security): eliminate ReDoS in tool-call-id sanitizers` | no regex-based tool-call-id sanitizer exists here |
+| `fix(core): prevent "Content block is not a text block" stream errors` | that message is not produced anywhere in this tree |
+| `fix: clamp max_output_tokens to Responses API floor of 16` | **measured, not assumed**: `max_tokens: 8` through `OpenCode Go Responses` answers 200, so there is no evidence of the defect here. A general clamp silently rewrites a caller's limit, and it is not worth adopting on speculation. Upstream's narrow `meta-token-floor.ts` already covers the case that was real |
+
+`fix: apply configurable per-route rate limits` is a feature rather than a
+defect, and nobody has asked for it.
+
+`fix: include server_tool_use in Anthropic usage`: `server_tool_use` is handled
+in the request log store and the hosted web-search evidence path here, but
+`usage/billing-sync.ts` counts only `input_tokens` and `output_tokens`. Whether
+that under-counts is not established and would need a provider that emits
+server tool use to measure. Left as an open lead rather than a finding.
+
+### What it did yield
+
+`fix: prune server logs daily and stabilize ccr.log rotation` pointed at our
+own service log, and the defect here is a different one. `openServiceLogFile`
+opens with `"w"`, so the file cannot grow without bound, and it also erases the
+start that just failed, which is the one anybody would want to read. One
+generation is now kept beside it as `ccr-service.log.1`. Two integration tests:
+the previous run's bytes survive verbatim and the new run starts empty. This
+sits on `fix/service-log-instead-of-discarded-output`, since it depends on that
+branch's work and cannot stand alone against upstream.
+
+`fix: propagate Retry-After headers from provider errors` is what prompted the
+local-sink measurement recorded above. Their patch was written when CCR itself
+made the upstream request; here the child does, so the same fix cannot apply
+and the header never arrives.
+
+### Attribution
+
+Nothing of oakimov's code was copied. The one commit taken from any fork this
+session is Peter Steinberger's, cherry-picked with `-x` so his authorship and
+the originating commit id are in the history. Both forks are MIT, the same
+licence as upstream.
