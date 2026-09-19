@@ -78,3 +78,18 @@ test("matches only a request carrying the oauth beta", () => {
   assert.equal(usesClaudeCodeOauth({ headers: {} }), false);
   assert.equal(usesClaudeCodeOauth({}), false);
 });
+
+test("a decline says why, except when the identity is already there", () => {
+  // Without the block Anthropic answers an empty 429, which reads as an
+  // exhausted plan. A silent decline is that same symptom with no cause.
+  const already = applyIdentity({ messages: [], system: [{ type: "text", text: CLAUDE_CODE_IDENTITY }] });
+  assert.equal(already.applied, false);
+  assert.equal(already.declined, undefined, "the benign case must stay quiet");
+
+  const notMessages = applyIdentity({ prompt: "hi" });
+  assert.match(notMessages.declined, /not an Anthropic messages request/);
+
+  const oddSystem = applyIdentity({ messages: [], system: { text: "you are helpful" } });
+  assert.equal(oddSystem.applied, false);
+  assert.match(oddSystem.declined, /neither a string nor an array/);
+});

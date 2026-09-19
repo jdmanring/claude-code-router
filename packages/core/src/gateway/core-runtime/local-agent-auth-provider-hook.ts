@@ -148,6 +148,11 @@ async function authenticateClaudeCode(
     claudeCodeOauthRequiredBeta
   );
   const body = withClaudeCodeIdentity(input.upstreamRequest.body);
+  if (body.declined) {
+    // One line separates "the identity was already there" from "I could not
+    // apply it", which otherwise present as the same empty 429.
+    console.warn(`[claude-code-identity] not applied: ${body.declined}`);
+  }
   return {
     ok: true,
     value: {
@@ -178,12 +183,20 @@ async function authenticateClaudeCode(
 // A subagent with its own system prompt, another agent falling back down a
 // chain, and any internal call are not, and those reach this provider last, so
 // the failure arrives when there is nothing left to fall back to.
-export function withClaudeCodeIdentity(value: unknown): { value: unknown; changed: boolean } {
+/**
+ * `declined` names why the block was not applied, for every reason except the
+ * one that is fine. Anthropic refuses a token carrying the Claude Code session
+ * scope without this block, and the refusal is an empty 429 that reads as an
+ * exhausted plan, so a silent decline is indistinguishable from the failure
+ * this function exists to prevent.
+ */
+export function withClaudeCodeIdentity(value: unknown): { value: unknown; changed: boolean; declined?: string } {
   if (!isRecord(value) || !Array.isArray(value.messages)) {
-    return { value, changed: false };
+    return { value, changed: false, declined: "the body is not an Anthropic messages request" };
   }
   const system = value.system;
   if (claudeCodeIdentityLeads(system)) {
+    // The only benign case: the client already identified itself.
     return { value, changed: false };
   }
   const identity = { text: claudeCodeIdentitySystemPrompt, type: "text" };
@@ -194,7 +207,7 @@ export function withClaudeCodeIdentity(value: unknown): { value: unknown; change
     ? [{ text: system, type: "text" }]
     : Array.isArray(system) ? system : undefined;
   if (!rest) {
-    return { value, changed: false };
+    return { value, changed: false, declined: `system is ${typeof system}, neither a string nor an array` };
   }
   return { value: { ...value, system: [identity, ...rest] }, changed: true };
 }

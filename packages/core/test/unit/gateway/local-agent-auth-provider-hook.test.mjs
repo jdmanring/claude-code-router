@@ -476,3 +476,28 @@ test("Claude Code auth hook identifies a request that does not identify itself",
     });
   });
 });
+
+test("declining to apply the identity block says why, except when it is already there", () => {
+  // The empty 429 Anthropic returns without this block reads as an exhausted
+  // plan, so a silent decline looks exactly like the failure the injection
+  // exists to prevent.
+  const already = withClaudeCodeIdentity({
+    messages: [{ content: "hi", role: "user" }],
+    system: [{ text: claudeCodeIdentitySystemPrompt, type: "text" }]
+  });
+  assert.equal(already.changed, false);
+  assert.equal(already.declined, undefined, "the benign case must stay quiet");
+
+  const notMessages = withClaudeCodeIdentity({ prompt: "hi" });
+  assert.equal(notMessages.changed, false);
+  assert.match(notMessages.declined, /not an Anthropic messages request/);
+
+  // A system value that is an object but neither string nor array: the shape
+  // that fell through without a word.
+  const oddSystem = withClaudeCodeIdentity({
+    messages: [{ content: "hi", role: "user" }],
+    system: { text: "you are helpful" }
+  });
+  assert.equal(oddSystem.changed, false);
+  assert.match(oddSystem.declined, /neither a string nor an array/);
+});

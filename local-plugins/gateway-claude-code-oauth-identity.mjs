@@ -42,11 +42,17 @@ const identityLeads = (system) => {
   return Boolean(first) && typeof first === "object" && first.text === CLAUDE_CODE_IDENTITY;
 };
 
+/**
+ * `declined` names every reason except the benign one. Without the block
+ * Anthropic answers an empty 429, which reads as an exhausted plan, so a
+ * silent decline is indistinguishable from the failure this prevents.
+ */
 export function applyIdentity(body) {
   if (!body || typeof body !== "object" || !Array.isArray(body.messages)) {
-    return { applied: false, body };
+    return { applied: false, body, declined: "the body is not an Anthropic messages request" };
   }
   const system = body.system;
+  // The only benign case: the client already identified itself.
   if (identityLeads(system)) return { applied: false, body };
   const identity = { type: "text", text: CLAUDE_CODE_IDENTITY };
   if (system === undefined || system === null || system === "") {
@@ -55,7 +61,7 @@ export function applyIdentity(body) {
   const rest = typeof system === "string"
     ? [{ type: "text", text: system }]
     : Array.isArray(system) ? system : undefined;
-  if (!rest) return { applied: false, body };
+  if (!rest) return { applied: false, body, declined: `system is ${typeof system}, neither a string nor an array` };
   return { applied: true, body: { ...body, system: [identity, ...rest] } };
 }
 
@@ -74,13 +80,18 @@ function withIdentity(upstreamRequest) {
   const raw = upstreamRequest.body;
   if (typeof raw === "string") {
     let parsed;
-    try { parsed = JSON.parse(raw); } catch { return { applied: false, upstreamRequest }; }
-    const { applied, body } = applyIdentity(parsed);
+    try { parsed = JSON.parse(raw); } catch (error) {
+      console.warn(`[claude-code-oauth-identity] not applied: the body is not JSON (${error.message})`);
+      return { applied: false, upstreamRequest };
+    }
+    const { applied, body, declined } = applyIdentity(parsed);
+    if (declined) console.warn(`[claude-code-oauth-identity] not applied: ${declined}`);
     return applied
       ? { applied, upstreamRequest: { ...upstreamRequest, body: JSON.stringify(body) } }
       : { applied, upstreamRequest };
   }
-  const { applied, body } = applyIdentity(raw);
+  const { applied, body, declined } = applyIdentity(raw);
+  if (declined) console.warn(`[claude-code-oauth-identity] not applied: ${declined}`);
   return applied ? { applied, upstreamRequest: { ...upstreamRequest, body } } : { applied, upstreamRequest };
 }
 
