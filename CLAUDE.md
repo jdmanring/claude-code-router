@@ -245,6 +245,7 @@ the live install, and each has its pure judgement pinned by tests run with
 | Which configured model ids does the provider still publish | `scripts/model-catalog-audit.mjs` | 4 |
 | Has anything in the config moved since it was known good | `scripts/config-audit.mjs` | 10 |
 | Does every fallback chain entry name a configured provider and model | the same, reported on every run | |
+| Which candidate model belongs in a slot | `scripts/model-probe.mjs` | 8 |
 | What did one request actually do | `scripts/ccr-log.mjs` | none |
 | Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 10 |
 
@@ -360,10 +361,22 @@ EvolveX, whose free tier publishes `free-nemotron`, `free-glm-air` and
 `free-step-flash` while the configured model was `moonshotai/kimi-k3`, which is
 in neither list.
 
-Note also that parameter count is not capability. A pick justified by one model
-being larger than another is a claim from priors, and this repository has been
-wrong making it. Where two candidates are both free and both answer, decide it
-with a probe that has one correct answer, and say so is a single reading.
+Note also that parameter count is not capability, and neither is one question.
+A pick justified by one model being larger than another is a claim from priors,
+and a pick justified by a single probe is a claim about that probe's shape: a
+code question selects a code model. Measured 2026-09-19, three times over.
+`mistral-large-3:free` and then `glm-5.2:free` were each chosen for Literouter
+on one question and each beaten by `deepseek-v3.2:free` across four task
+shapes. `codestral-latest` won a Python-semantics question and lost every task
+requiring an instruction to be followed, answering a request for one number
+with "Alright, let's tackle this problem step by step". And
+`nvidia/nemotron-3-ultra-550b-a55b` tied with a far smaller sibling on one
+provider and lost to `nemotron-3-super-120b-a12b` on another.
+
+`scripts/model-probe.mjs` is the instrument: four task shapes an agent slot
+actually serves, one request each. It spends four requests per model, so say
+what that costs against the provider's allowance first, and treat a one-task
+margin as no result.
 
 A provider that fronts several upstreams bills per upstream, so the prefix on
 the model id chooses the pool and the same model is free under one and charged
