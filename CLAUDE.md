@@ -349,6 +349,22 @@ than per account, so the exhausted tier and the working tier sit side by side
 in one provider. The reading that separates an account gate from a moved model
 is whether *every* model returns the same error.
 
+**Where a provider offers both free models and a credit balance, configure the
+free model.** A provider that grants a little money and also publishes free
+models will happily spend the money on a paid model that a free sibling could
+have answered, and the balance is the scarce thing: it does not refresh on most
+of these accounts, while the free tier resets. Read the catalogue for the free
+marker rather than assuming the most capable id is the right one, because the
+strongest model in a catalogue is usually the paid one. Measured 2026-09-19 on
+EvolveX, whose free tier publishes `free-nemotron`, `free-glm-air` and
+`free-step-flash` while the configured model was `moonshotai/kimi-k3`, which is
+in neither list.
+
+Note also that parameter count is not capability. A pick justified by one model
+being larger than another is a claim from priors, and this repository has been
+wrong making it. Where two candidates are both free and both answer, decide it
+with a probe that has one correct answer, and say so is a single reading.
+
 A provider that fronts several upstreams bills per upstream, so the prefix on
 the model id chooses the pool and the same model is free under one and charged
 under another. Measured on Requesty: `google/gemma-4-31b-it` answers while
