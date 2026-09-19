@@ -2,7 +2,7 @@ import { readClaudeCodeOauth, readGrokAuth, readKimiAuth, resolveGrokAuth, resol
 import { grokAccessTokenExpired, grokClientVersion } from "@ccr/core/agents/local-providers/grok";
 import { kimiAccessTokenExpired, kimiIdentityHeaders } from "@ccr/core/agents/local-providers/kimi";
 import { transformCodexApplyPatchBridgeRequestBody } from "@ccr/core/gateway/features/codex-patch-bridge";
-import { claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta } from "@ccr/core/gateway/internal/shared";
+import { claudeCodeIdentitySystemPrompt, claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta } from "@ccr/core/gateway/internal/shared";
 import { isRecord, stringValue } from "@ccr/core/gateway/internal/value";
 import { mergeAnthropicBetaValues } from "@ccr/core/providers/oauth-plugin";
 
@@ -147,13 +147,57 @@ async function authenticateClaudeCode(
     originalAnthropicBetaDefault(plugin),
     claudeCodeOauthRequiredBeta
   );
+  const body = withClaudeCodeIdentity(input.upstreamRequest.body);
   return {
     ok: true,
     value: {
       ...input.upstreamRequest,
+      body: body.changed ? body.value : input.upstreamRequest.body,
       headers
     }
   };
+}
+
+// Anthropic refuses a token carrying the Claude Code session scope unless the
+// request identifies itself as Claude Code in its first system block, and the
+// refusal is `429 rate_limit_error` with an empty message. Read as a quota that
+// takes a working subscription out of every chain naming it, while the usage
+// endpoint reports each limit well inside its allowance.
+//
+// A top-level Claude Code turn carries the block already and is returned
+// unchanged. Everything else routed to this provider does not: a subagent with
+// its own system prompt, another agent falling back down a chain, or any
+// internal call. Those are exactly the requests that reach the provider last,
+// so the failure lands when there is nothing left to fall back to.
+export function withClaudeCodeIdentity(value: unknown): { value: unknown; changed: boolean } {
+  if (!isRecord(value) || !Array.isArray(value.messages)) {
+    return { value, changed: false };
+  }
+  const identity = { text: claudeCodeIdentitySystemPrompt, type: "text" };
+  const system = value.system;
+  if (system === undefined || system === null) {
+    return { value: { ...value, system: [identity] }, changed: true };
+  }
+  if (typeof system === "string") {
+    return system.startsWith(claudeCodeIdentitySystemPrompt)
+      ? { value, changed: false }
+      : { value: { ...value, system: [identity, { text: system, type: "text" }] }, changed: true };
+  }
+  if (!Array.isArray(system)) {
+    return { value, changed: false };
+  }
+  return hasClaudeCodeIdentity(system[0])
+    ? { value, changed: false }
+    : { value: { ...value, system: [identity, ...system] }, changed: true };
+}
+
+function hasClaudeCodeIdentity(block: unknown): boolean {
+  if (typeof block === "string") {
+    return block.startsWith(claudeCodeIdentitySystemPrompt);
+  }
+  return isRecord(block)
+    && typeof block.text === "string"
+    && block.text.startsWith(claudeCodeIdentitySystemPrompt);
 }
 
 async function resolveLiveGrokAccessToken(plugin: Record<string, unknown>): Promise<string | undefined> {
