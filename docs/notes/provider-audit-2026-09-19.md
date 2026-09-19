@@ -199,3 +199,52 @@ only limit; no per-minute rate limit is published for Inference Providers.
 
 Status: `no endpoint`.
 
+## Chasing the header class to its boundary
+
+Writing "no endpoint" a fourth time for a provider that does publish usage was
+the signal to stop cataloguing and go after the blocker. Four measurements, in
+order:
+
+1. **The child replaces the headers.** One request through CCR to Groq returns
+   27 response headers to the client and not one of them is Groq's. The
+   vendored gateway child answers with its own set: `x-gateway-billing-*`,
+   `x-gateway-target-provider`, `x-ccr-provider-protocol`. Groq's
+   `x-ratelimit-*` do not survive the hop, so the empty `response_headers`
+   column is not CCR failing to record what it had.
+
+2. **CCR's own executor does hold a `Response` with headers.**
+   `upstream/executor.ts` already reads them, for
+   `recordProviderCredentialOutcome` and `cooldownAfterStatus`. But that
+   response is the child's, per point 1, so those headers are the child's too.
+
+3. **The route trace carries no headers either.** An
+   `upstream.attempt.outcome` hop holds `statusCode`, `fallbackReason`,
+   `retryDelayMs` and nothing else, so nothing downstream can recover them.
+
+4. **The extension point is real and documented.** The vendored runtime ships
+   `docs/plugins.md`, which lists `responseHooks` ("transform final
+   non-streaming client responses") and `streamHooks` ("transform an upstream
+   streaming Response before it is relayed"), with `transformResponse(input)`
+   and an input carrying `upstreamResponse`. CCR's own `router-plugin.ts`
+   registers both.
+
+`local-plugins/gateway-upstream-usage-headers.mjs` is the evidence gate for
+that last point: it registers a response hook and a stream hook, extracts any
+`x-ratelimit`, quota, credit, balance or `retry-after` header from
+`input.upstreamResponse`, and writes them to
+`app-data/upstream-usage-headers.json`. It changes no response.
+
+**Measured result: the module loads and both hooks register, and neither fired**
+on three dispatch paths - `openai_chat_completions` (Groq),
+`openai_responses` (OpenCode Go) and `anthropic_messages` (Claude Code API).
+The registration line appears in `ccr-service.log`; no invocation line does.
+That is a measured negative, not a conclusion about why.
+
+Next step, bounded: read the hook dispatch in the vendored bundle
+(`dist/main/next-ai-gateway.js`, 22 occurrences of `responseHooks`) to find the
+condition under which a module hook is invoked. The plugin stays registered so
+that the answer can be tested immediately. Until it fires, header-reported
+usage - which is the only usage signal Groq and the rest of the OpenAI
+convention offer - stays out of reach, and writing "no endpoint" against those
+providers is accurate but incomplete.
+
