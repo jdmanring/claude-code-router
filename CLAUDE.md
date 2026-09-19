@@ -263,6 +263,7 @@ column: `for f in scripts/*.test.mjs local-plugins/*.test.mjs; do node --test "$
 | Has anything in the config moved since it was known good | `scripts/config-audit.mjs` | 10 |
 | Does every fallback chain entry name a configured provider and model | the same, reported on every run | |
 | Which candidate model belongs in a slot | `scripts/model-probe.mjs` | 8 |
+| How much of each provider's allowance is left | `scripts/provider-allowance.mjs` | 7 |
 | What did one request actually do | `scripts/ccr-log.mjs` | none |
 | Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 14 |
 
@@ -332,6 +333,21 @@ infers from the model id: a model wrongly called non-chat gets deleted from a
 working configuration, so an entry that says nothing stays silent. Note that
 this means a provider publishing no modality at all is unchecked rather than
 clean.
+
+**Read the allowance before a sweep, not after.** `provider-allowance.mjs`
+reuses the account snapshots CCR already builds, so it evaluates the usage
+connectors exactly as the UI does and spends no inference quota. A provider
+whose meter reports spent will answer 429 to every probe, and the probe costs
+a request to learn what the meter gives away: measured 2026-09-19, Codex API
+was swept twice for two 429s while its quota already read 0 of 100.
+
+Its judgment is which meter binds, and the trap is that a spent account and an
+unreadable connector both present as zero. A meter reporting nothing left and
+nothing spent is recorded as no reading rather than exhausted, because calling
+it exhausted retires a working provider. An unreadable meter also never hides a
+readable one: OpenRouter publishes a credits meter resolving to undefined
+beside a balance holding 19.79 of 20, and ranking the unreadable one first
+reported that account as unknown.
 
 `scripts/ccr-log.mjs` has no tests. It reads and prints, and a wrong reading is
 visible immediately, so the gap is deliberate rather than overlooked.
