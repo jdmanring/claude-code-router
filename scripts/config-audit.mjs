@@ -53,6 +53,14 @@ function snapshot(source) {
         .sort(),
       enabled: provider.enabled !== false,
       modelCount: (provider.models ?? []).length,
+      // Usage tracking is config like any other and silently reverts with it.
+      // Record the endpoints rather than a count, so a connector repointed at a
+      // path carrying no consumption reports drift instead of looking unchanged.
+      usageConnectors: provider.account?.enabled === true
+        ? (provider.account.connectors ?? [])
+          .map((connector) => connector.endpoint ?? connector.type ?? "(unnamed)")
+          .sort()
+        : [],
       protocolDetectionMode: provider.protocolDetectionMode ?? "(unset)"
     };
   }
