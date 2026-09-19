@@ -162,3 +162,41 @@ deletes another provider's line, because the same id appears under several
 providers. Scope such an edit to the provider's own block, and drive it from
 the difference between two configuration snapshots rather than from what a
 line looks like.
+
+## The picks were made from the wrong pool
+
+The consolidation chose, for fourteen of the sixteen providers, the best model
+**already configured** rather than the best model the provider **publishes**.
+Literouter showed why that is wrong: its free tier carries 42 models and the
+configured lead was a mid-tier member of a family whose flagship is also free.
+Reading every consolidated provider's catalogue afterwards, at no inference
+cost, found three more:
+
+- **EvolveX** was configured with `moonshotai/kimi-k3`, which appears in
+  neither its free list nor anywhere a free marker is published. Its free tier
+  is `free-nemotron`, `free-glm-air` and `free-step-flash`.
+- **Kilo** publishes 22 free models, among them
+  `nvidia/nemotron-3-ultra-550b-a55b:free`, `z-ai/glm-5.2:free` and
+  `cohere/north-mini-code:free`, against a configured `nex-agi/nex-n2.5-pro:free`.
+- **Huggingface** was configured with `inclusionAI/Ling-3.0-flash-Fin:novita`,
+  a finance-tuned variant, for general coding work, while the same account
+  reaches `zai-org/GLM-5.3-Flash` and `deepseek-ai/DeepSeek-V4.1-Flash`.
+
+Three picks were confirmed rather than changed. Routeway publishes only three
+free models and the configured one is the strongest. Yolo-Auto publishes two.
+GonkaBroker publishes no free model at all: every id carries a price, from
+$0.20 per million for `zai-org/GLM-5.3-Flash` to $0.25 for the configured
+`MiniMaxAI/MiniMax-M2.7`, so its "$0 Free" is a rate allowance rather than a
+free catalogue and the capable pick stands.
+
+**Where a provider grants a credit balance and also publishes free models, the
+free model wins.** The balance is the scarce side: on most of these accounts it
+does not refresh, while the free tier resets. This is not a preference to
+weigh against capability, because the most capable id in a catalogue is
+normally the paid one, which is exactly how EvolveX ended up configured with a
+model off its free list.
+
+Parameter count is not capability, and "this model is larger" is a claim from
+priors rather than a reading. Where two candidates are both free and both
+answer, the tie is broken by a probe with one correct answer, and one probe is
+one reading.
