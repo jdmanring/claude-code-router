@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { DatabaseSync } from "node:sqlite";
+import { providerSlug, usageProviderKey } from "./ccr-log.mjs";
 
 const dir = mkdtempSync(path.join(os.tmpdir(), "ccr-log-test-"));
 const dbPath = path.join(dir, "request-logs.sqlite");
@@ -84,4 +85,43 @@ test("a missing database is refused rather than reported as empty", () => {
   });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /No request log at/);
+});
+
+test("one provider written two ways is counted once", () => {
+  // A final outcome records the display name; a row recovered from a raw
+  // trace records the routing selector. Grouping without this reports most
+  // providers twice, once as an always-failing identity, because the selector
+  // rows are overwhelmingly the failures.
+  const bySlug = new Map([["ovh", "OVH"], ["google-gemini", "Google Gemini"]]);
+  assert.equal(usageProviderKey("OVH", bySlug).key, "OVH");
+  assert.equal(usageProviderKey("ovh::openai_chat_completions", bySlug).key, "OVH");
+  assert.equal(usageProviderKey("google-gemini::gemini_generate_content", bySlug).key, "Google Gemini");
+});
+
+test("a selector for a provider no longer configured keeps its raw name", () => {
+  // Inventing a display name for a deleted provider would hide that the
+  // history predates its removal. Measured: meta and venice are exactly this.
+  const result = usageProviderKey("venice::openai_chat_completions", new Map());
+  assert.equal(result.key, "venice");
+  assert.equal(result.known, false, "it must be marked as absent from the config");
+});
+
+test("an unattributed row is not counted as a provider", () => {
+  // The recorder writes the literal "unknown" when it cannot attribute a
+  // request. Sorting that among real providers reports a phantom with a
+  // failure rate.
+  for (const value of ["", "   ", "unknown", "UNKNOWN", undefined, null]) {
+    const result = usageProviderKey(value, new Map());
+    assert.equal(result.key, "(unattributed)", `${JSON.stringify(value)} should be unattributed`);
+    assert.equal(result.known, false);
+  }
+});
+
+test("the slug rule matches the selector this install actually writes", () => {
+  // Derived from the data, not assumed: the dot survives and the bracketing
+  // punctuation does not, which a naive slug would get wrong in both places.
+  assert.equal(providerSlug("Z.ai (Global) - General Endpoint"), "z.ai-global---general-endpoint");
+  assert.equal(providerSlug("Google Gemini"), "google-gemini");
+  assert.equal(providerSlug("Codex API"), "codex-api");
+  assert.equal(providerSlug("OVH"), "ovh");
 });

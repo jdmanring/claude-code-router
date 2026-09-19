@@ -279,7 +279,8 @@ column: `for f in scripts/*.test.mjs local-plugins/*.test.mjs; do node --test "$
 | Does every fallback chain entry name a configured provider and model | the same, reported on every run | |
 | Which candidate model belongs in a slot | `scripts/model-probe.mjs` | 8 |
 | How much of each provider's allowance is left | `scripts/provider-allowance.mjs` | 7 |
-| What did one request actually do | `scripts/ccr-log.mjs` | 5 |
+| What did one request actually do | `scripts/ccr-log.mjs` | 9 |
+| Which providers have answered nothing lately | the same, with `--usage` | |
 | Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 14 |
 
 Two properties worth keeping. **Importing any of them except `ccr-log.mjs`
@@ -363,6 +364,21 @@ it exhausted retires a working provider. An unreadable meter also never hides a
 readable one: OpenRouter publishes a credits meter resolving to undefined
 beside a balance holding 19.79 of 20, and ranking the unreadable one first
 reported that account as unknown.
+
+`ccr-log.mjs --usage` reads `usage.sqlite`, which carries no time-based prune
+and so outlives the request log. It answers the question a sweep is usually
+run for, at no cost: measured over fourteen days, OVH answered nothing in 591
+requests while holding more chain entries than any other provider.
+
+Two readings it cannot give. The rows are final outcomes, so a four-entry
+chain leaves at most two of them and the middle entries are absent: these are
+per request, not per attempt. And one provider is written two ways, the
+display name on a final row and the `provider::protocol` selector on a row
+recovered from a raw trace, so grouping without normalizing reports most
+providers twice, once as an always-failing identity. The mapping is derived
+from the data rather than assumed, resolving 35 of the 38 selector prefixes
+present; the rest are providers since deleted, and they keep their raw name so
+the history is not attributed to something still configured.
 
 `scripts/ccr-log.mjs` was left untested on the reasoning that it reads and
 prints, so a wrong reading would be visible immediately. That was wrong, and
