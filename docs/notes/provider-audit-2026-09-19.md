@@ -1021,3 +1021,42 @@ disabling rather than left occupying a chain slot.
 **The method lesson:** when a single path 404s while its siblings answer, ask
 whether the vendor still documents it before explaining why the account cannot
 reach it. The documentation returning 404 is itself the measurement.
+
+### Why v0 looked like it worked: the chain answered for it
+
+James recalled getting replies from v0's mini and pro models through CCR when
+he first set the provider up. The recollection is accurate about what he saw
+and the records explain it.
+
+`usage.sqlite` keeps usage-attributed events past the request-log retention, and
+it holds **24 v0 events**. Every one is `404` or `422`, with zero input and zero
+output tokens. There has never been a 200:
+
+| when | model | protocol | status |
+| --- | --- | --- | --- |
+| 2026-09-14, 09-16 | `v0-mini`, `v0-pro` | connectivity check | 422 |
+| 2026-09-18 15:46, 15:58 | `v0-mini` | `v0::anthropic_messages` | 422 |
+| 2026-09-18 17:30 onward | `v0-1.5-md` | `v0::openai_chat_completions` | 404 |
+
+So `v0-mini` and `v0-pro` were configured, which is the memory, and they never
+answered.
+
+What he saw was the fallback chain. Today's request reproduces it exactly: the
+request log row reads `v0/v0-1.5-md -> nex-agi/nex-n2.5-pro:free`, **status
+200**, provider `openrouter::openai_chat_completions`. A client asks for a v0
+model, v0 fails, another provider answers, and the caller receives a 200 with
+real text.
+
+**That is the trap, and it is general.** A provider that has never once worked
+looks like it works, because CCR answers 200 with real content and the only
+evidence of the substitution is `x-ccr-fallback-attempts` on the response or
+the route trace. Reading a reply is not evidence that the provider named in the
+request produced it.
+
+It is also the reason `scripts/provider-working-model.mjs` calls providers
+**directly** rather than through the gateway: through the chain, every provider
+in a healthy chain looks alive.
+
+The 422s are not evidence of an Anthropic-shaped endpoint either: `/v1/messages`
+and `/v1/responses` on `api.v0.dev` both answer 404 today, so that status came
+from CCR's own adapter rejecting the request before it left.
