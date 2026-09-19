@@ -162,3 +162,40 @@ one.
 
 Status: `as documented`, `no endpoint`.
 
+### Requesty - a management API exists, its usage endpoint is not in the overview
+
+Documentation: `https://docs.requesty.ai/api-reference/management-apis`. All
+management endpoints sit on `https://api-v2.requesty.ai/v1/manage`, separate
+from the router base url configured here. The overview lists key management and
+group budgets, and says the organization endpoint returns "organization details
+including settings and usage information", but names neither the exact path nor
+the credential. An OpenAPI specification is published and is where that
+resolves.
+
+Requesty is also the provider whose billing pool is chosen by the model prefix,
+which is already recorded in the repository guide.
+
+Status: candidate, unresolved. Next step is the OpenAPI spec, not a probe.
+
+### Cloudflare Workers AI - free allowance is real, usage lives behind a different credential
+
+Documentation: `https://developers.cloudflare.com/workers-ai/platform/pricing/`.
+10,000 Neurons a day free, a hard limit on the free plan rather than a spend;
+paid usage is $0.011 per 1,000 Neurons. Usage is reported in the dashboard and
+through Cloudflare's analytics API, which takes an account-scoped API token
+with analytics permission, not the Workers AI token configured here. The
+configured base url carries the account id and is the documented REST form.
+
+Status: `as documented`; `needs account action` for usage (an analytics-scoped
+Cloudflare token).
+
+### Hugging Face - no credits endpoint is documented
+
+Documentation: `https://huggingface.co/docs/inference-providers/` and the Hub
+API reference. `api/whoami-v2` validates a token and reports the account, but
+Hugging Face documents no endpoint for remaining inference credit, and does not
+document the error returned when the monthly credit is spent. The credit is the
+only limit; no per-minute rate limit is published for Inference Providers.
+
+Status: `no endpoint`.
+
