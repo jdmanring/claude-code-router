@@ -986,3 +986,38 @@ the same defect class as the sweep's `200 no output`;
 `fix: hold routed requests through upstream 429s with a rate-limit wait
 budget`; and `fix: inherit preset provider account configs and surface
 unsupported account states`.
+
+## v0: the Model API was withdrawn, which is why every reading contradicted the last
+
+Three passes gave three different answers - "no OpenAI surface", "a plan gate",
+"a chat-session API" - and all three were wrong the same way: each explained a
+404 without asking whether the endpoint still exists.
+
+What settles it:
+
+- `v0.app/docs/api/model` returns **404**. `v0.app/docs/api/platform` does not,
+  and documents `/v1/chats`. The Model API's documentation is gone; the
+  Platform API's remains.
+- `/v1/chat/completions` answers 404 for `v0-1.5-md`, `v0-1.5-lg`, `v0-1.0-md`
+  and `v0-md`, using the **exact request the vendor's own VS Code extension
+  sends** (`vercel/v0-language-model-chat-provider`, `src/provider.ts`: base
+  `https://api.v0.dev`, `Bearer` key, `max_completion_tokens`), with a valid
+  `v1:`-prefixed 93-character key.
+- `/v1/models` is 404, while `/v1/chats`, `/v1/deployments`, `/v1/user`,
+  `/v1/user/billing` and `/v1/rate-limits` all answer 200. Authentication is
+  fine; that one path is not served.
+- The Vercel AI Gateway catalogue, 372 models, contains no v0 entry, so there
+  is no sibling route either.
+- Another user reports the identical symptom on Vercel's own forum, unanswered.
+
+The free plan being real, cycle credit unspent remaining, was never the contradiction
+it looked like: that credit is for the v0 product, not for an inference API
+that no longer exists. The "requires a Premium or Team plan" reading came from
+search results written while the API was live.
+
+There is nothing to satisfy. The provider cannot serve a model and is worth
+disabling rather than left occupying a chain slot.
+
+**The method lesson:** when a single path 404s while its siblings answer, ask
+whether the vendor still documents it before explaining why the account cannot
+reach it. The documentation returning 404 is itself the measurement.
