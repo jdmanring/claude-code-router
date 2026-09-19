@@ -718,12 +718,12 @@ worktree (`git worktree add --detach <dir> origin/main`, symlink the root
 `node_modules`, then `node build/test.mjs core && node build/run-tests.mjs
 core`) and compare failure names. Attribute only the difference.
 
-Measured 2026-09-19 at `origin/main` `a034b0c5`, with this fork 133 commits
-ahead:
+Measured 2026-09-19 at `origin/main` `a034b0c5`. The fork column was re-read
+later the same day, 159 commits ahead, after eight tests were added:
 
 | | upstream | this fork |
 | --- | --- | --- |
-| pass | 996 | 1064 |
+| pass | 996 | 1072 |
 | fail | 5 | 2 |
 
 Upstream's five: the Kimi CLI profile home, the provider model catalog preset
