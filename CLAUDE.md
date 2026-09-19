@@ -431,8 +431,13 @@ preset supplies one for a minority of providers. Where none exists, an
 `http-json` connector can be written by hand against the provider's own
 response, with `mapping.meters[]` naming JSONPath expressions for `limit`,
 `used` and `remaining` (arithmetic over them is allowed, so
-`"$.limits.daily_tokens - $.usage.daily.tokens"` works). Thirteen providers
-report here; the recipe and the discovery sweep are in project memory.
+`"$.limits.daily_tokens - $.usage.daily.tokens"` works, though only between
+two paths: a literal operand such as `/ 500000` yields no meter at all). How
+many providers report is configuration rather than a fact about this
+repository, so count it rather than trusting a number written here:
+`node scripts/config-audit.mjs --show` lists every provider's
+`usageConnectors`. The recipe, the discovery sweep and the endpoints that look
+like tracking and are not are in project memory.
 
 **Usage published in response headers cannot be read here, and that is
 settled.** Groq and the OpenAI convention report remaining capacity in
