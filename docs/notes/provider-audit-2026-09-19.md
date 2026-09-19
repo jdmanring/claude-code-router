@@ -292,3 +292,71 @@ returned a balance error is no longer reachable either, so this closes the only
 door that funding could have opened on this endpoint. The Go lane is a separate
 endpoint and is unaffected.
 
+## Fork survey, 2026-09-19
+
+`gh api repos/musistudio/claude-code-router/forks?sort=stargazers`. Of the
+fifteen most-starred, exactly one carries substantial independent work:
+`oakimov/claude-code-router`, 165 commits ahead and 588 behind, last pushed
+2026-09-09. `steipete` is 1 ahead, `02Fabs` 0 ahead; the rest are stale
+mirrors. Being 588 behind means oakimov sits on the pre-3.x architecture
+(`transformers/`, `src/api/routes`), so their commits are ideas to read rather
+than patches to cherry-pick.
+
+Taken from it and applied: **fast-uri**. Their `fix(security)` commits bump it
+twice. This fork's own `overrides` entry pinned `fast-uri@3.1.2` to `3.1.5`,
+which is one patch below the fix for four advisories - host confusion via
+percent-encoded scheme normalization (GHSA-jqff-g426-hqxp), host confusion via
+skipped IDN canonicalization (GHSA-5jgf-p345-68v8), and request forgery through
+malformed IPv6 normalization (GHSA-f65p-4m7j-42xc) and repeated hostname
+percent-decoding (GHSA-fph4-wmhf-6fwf). Both consumers accept `^3.0.0`, so the
+pin moved to 3.1.8 and `npm audit` reports fast-uri clean. Nine advisories
+remain in the tree: @xmldom/xmldom, brace-expansion, electron, esbuild,
+fastify, js-yaml, pm2, tar, undici.
+
+Leads not yet read, all from the same fork: `fix: propagate Retry-After headers
+from provider errors`, `fix(router): stop tiktoken crash and empty-default
+route from killing requests`, `fix(ui): replace localStorage API key with
+HttpOnly session cookies`, `fix: prune server logs daily and stabilize ccr.log
+rotation`, `perf(core): reduce JSON serialize/deserialize on hot path`.
+
+## The OpenCode extension question
+
+CCR already ships the extension. `packages/core/src/agents/local-providers/`
+holds `claude-code.ts`, `codex.ts`, `grok.ts`, `kimi.ts`, `zcode.ts` **and
+`opencode.ts`** (688 lines), which knows both endpoints
+(`https://opencode.ai/zen/v1`, `/zen/go/v1`), reads OpenCode's credential from
+its config files, `OPENCODE_AUTH_CONTENT`, or `OPENCODE_API_KEY`, and imports
+it as a provider with its model catalogue.
+
+What it imports is an **API key**. That is the whole difference from the Codex
+and Claude Code providers: those borrow a locally installed agent's OAuth token
+and the vendor accepts it, because what is checked is the credential. Zen's
+free lane checks the **client**, so no credential import can satisfy it.
+Borrowing a better token would not help; there is no token that makes CCR
+OpenCode.
+
+`oakimov/claude-code-router` does close that gap, by sending OpenCode's
+identity: `chore(opencode): bump USER_AGENT to 1.18.25`, `feat:
+opencode-headers Zen retry`, `fix(opencode): parity session tricks for Zen
+prompt caching`, `fix(opencode): align Zen reliability with upstream 1.18.23`.
+Those commit titles are also the maintenance cost: the User-Agent has to track
+OpenCode's releases, so it is a treadmill against a vendor actively tightening
+the check.
+
+Not adopted here. It impersonates another client to reach a tier the vendor
+restricted to that client, which is a different act from borrowing a credential
+the vendor accepts.
+
+### OpenCode on this machine
+
+Installed 2026-09-19: `~/.opencode/bin/opencode`, v2.0.9, a 198MB ELF binary
+(no source tree). State lives in `~/.local/share/opencode/opencode.db`.
+
+**It is not signed in.** The `account`, `account_state`, `control_account` and
+`credential` tables all hold zero rows; `session_v2` holds one session and
+`session_message` three. So there is currently no OpenCode credential for
+`opencode.ts` to import, and the Zen provider configured here is using an API
+key entered by hand rather than anything OpenCode supplied. Signing OpenCode in
+would give `importLocalAgentProvider` something to read, and would not change
+the free-tier answer.
+
