@@ -391,8 +391,16 @@ does the same thing from the plugin host, which needs no rebuild. Both are
 idempotent. Note that the plugin host loads plugin modules when the gateway
 child starts, so editing the file changes nothing until the child restarts, and
 a `saveConfig` whose content is unchanged does not restart it: use
-`restartGateway`. DEFER(once the installed dist is rebuilt from this tree):
-drop the local plugin and let `withClaudeCodeIdentity` carry it alone.
+`restartGateway`.
+
+The install was rebuilt from this tree on 2026-09-19, and the core fix was then
+measured carrying the request on its own: with the plugin disabled and the
+child restarted, so that its registration line is absent from
+`ccr-service.log`, `Claude Code API` answered 200 twice. The plugin is left
+present but disabled rather than deleted, because the failure it covers returns
+the moment the global package is replaced by an upstream build, and that
+failure reads as an exhausted plan rather than as a missing patch. Re-enable it
+by id, not by module path: the entry carries no module field.
 
 ## Read the provider's own documentation before probing it
 
