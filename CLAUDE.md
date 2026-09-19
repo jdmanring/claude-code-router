@@ -702,6 +702,29 @@ config against a saved baseline, naming the exact value that moved. Take the
 baseline with `--save` once the config is known good. Credentials are reduced to
 their length, so the baseline holds no secret.
 
+## A chain that keeps trying a dead entry is a cooldown that forgets
+
+`markTargetCoolingDown` applies a duration per consecutive failure, doubling
+each time and capped at thirty minutes, and `clearTargetCooldown` on a success
+drops the streak so a recovered target returns on the next request.
+
+It used to apply a flat duration with no memory of repetition, which is the
+defect worth remembering rather than the fix. The fiftieth consecutive failure
+was sidelined for the same interval as the first, so a target that never
+answered rejoined the chain every interval for as long as the process lived,
+and every request behind it paid an attempt. Measured 2026-09-19 against one
+day of real traffic: 92 of 125 requests took four attempts, and the providers
+at the head of those chains answered 23 per cent, 24 per cent and nothing at
+all over the preceding fortnight.
+
+The general form: **reordering a chain by hand is a workaround for a chain
+that cannot demote its own entries.** If the answer to a dead provider is
+"edit the config", the routing layer is missing a capability, because the
+chain exists so that nobody has to.
+
+The streak is in memory, so a restart re-learns it at a cost of one attempt
+per target. Persisting it is possible and has not been needed.
+
 ## The target cooldown never sees a provider's Retry-After
 
 `cooldownAfterStatus` and `retryDelayAfterStatus` read `retry-after` from the
