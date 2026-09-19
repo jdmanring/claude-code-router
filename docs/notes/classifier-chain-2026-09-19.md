@@ -100,7 +100,6 @@ The resulting chain, every entry measured answering 200 at this body size:
 2. `Google Gemini/gemini-3.5-flash-lite`
 3. `Fastrouter/google/gemma4-26b:free`
 4. `XKIRO/minimax/minimax-m3:free`
-5. `NVIDIA/moonshotai/kimi-k3`
 
 OVH was removed: it answered nothing in 590 requests over the window.
 
@@ -125,9 +124,21 @@ this chain has to come from separate accounts, not from more models on one.
 MegaNova keeps the head because the quota resets and the cooldown sidelines it
 for the remainder of a day after three failures.
 
-`NVIDIA/moonshotai/kimi-k3` takes the freed position. It answered 41 of 41 at
-bodies up to 1044KB on an account no other entry shares, at about 115s, so it
-sits last as a floor rather than anywhere a user waits on it.
+Nothing took the freed position, and the chain is four entries rather than
+five. That is the better answer than padding it.
+
+`NVIDIA/moonshotai/kimi-k3` was the obvious filler and is wrong twice over. It
+spends about 123s on a 60K-token prefill while returning 282 output tokens and
+no reasoning tokens at all, so the cost is the model's size rather than any
+thinking it does: a trillion-parameter mixture is the wrong shape for reading a
+transcript and emitting one tag. It is also position 4 of `rule-1`, the main
+work chain, so putting it here spends the account that serves the session the
+classifier exists to guard. `Ollama` fails the same test for the same reason,
+being metered and the profile's own `model` and `opusModel`.
+
+A chain entry has to be free, able to hold the body, and **not already
+committed to real work**. That third condition is what rules out every
+remaining model the log shows answering at this size.
 
 One candidate was tested and not adopted. `openai/gpt-oss-safeguard-20b` is
 the only classifier-tuned family with the right shape, since it is conditioned

@@ -455,6 +455,18 @@ free quota is spent, which the classifier's own volume is enough to do. That
 is the argument for spreading the chain across separate accounts rather than
 adding models to one.
 
+A fourth condition rules out most of what is left: an entry must not already be
+committed to real work. `NVIDIA/moonshotai/kimi-k3` answers at this size but
+takes about 123s for a 60K-token prefill, returning 282 output tokens and no
+reasoning tokens, and it is position 4 of the main work chain. Spending a
+premium model's account to guard the session it serves is worse than a shorter
+chain, so the classifier chain is four entries and stays that way until
+something free and uncommitted qualifies.
+
+Qualify a candidate on a stored body, never on a short prompt.
+`openai/gpt-oss-20b:free` answers `<block>no` correctly on a toy request and
+returns `finish=length` with empty content on a real one.
+
 ## Provider triage
 
 **OVH is anonymous access and takes no API key.** Its empty `api_key` is
