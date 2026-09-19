@@ -576,7 +576,7 @@ export async function fetchUpstreamWithFallback(input: {
           statusCode: response.status
         });
         recordProviderCredentialOutcome(input.config, input.method, attempt, response.status, response.headers);
-        markTargetFailure(plannedAttempt.model, cooldownAfterStatus(response.headers, response.status));
+        markTargetFailure(plannedAttempt.model, cooldownAfterStatus(response.headers, response.status), response.status);
         // An account-scoped refusal applies to every model that provider
         // serves, so the whole provider is sidelined rather than each of its
         // chain entries learning the same refusal independently.

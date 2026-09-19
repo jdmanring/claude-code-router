@@ -40,6 +40,42 @@ const failureStreakBeforeCooldown = 3;
 const defaultStreakCooldownMs = 60_000;
 
 /**
+ * Statuses whose answer is decided by the shape of the request rather than by
+ * anything about the target's state.
+ *
+ * Every other refusal here is a bet about time: a 429 clears when the window
+ * rolls, a 403 when the account is topped up, a 500 when the provider recovers,
+ * so retrying later is worth an attempt. A target that refuses the request
+ * because it is too large will refuse the identical request every time, and no
+ * amount of waiting changes that. Escalating backoff caps at thirty minutes, so
+ * such an entry rejoined the chain twice an hour for the life of the process
+ * and cost an attempt each time.
+ *
+ * Measured 2026-09-19: Groq answers 413 to every auto-mode classifier request,
+ * which is 170-240KB against its per-request ceiling, while answering ordinary
+ * traffic normally. The entry had to be removed from that chain by hand, which
+ * is the workaround this store exists to make unnecessary.
+ *
+ * Deliberately narrow. Only sizes are listed, because a size refusal is the
+ * case where the request alone settles it. A 400 or 404 can mean a model was
+ * briefly withdrawn or a route briefly misconfigured, so those keep the
+ * ordinary escalation and its chance to recover.
+ */
+const requestShapeRefusalStatuses = new Set([413, 414, 431]);
+
+/**
+ * Long enough that a target refusing on size stops costing attempts, short
+ * enough that raising a provider's limit is picked up the same day without a
+ * restart.
+ */
+const requestShapeCooldownMs = 12 * 60 * 60_000;
+
+/** Whether the request, rather than the target's state, decided this refusal. */
+export function isRequestShapeRefusal(statusCode: number): boolean {
+  return requestShapeRefusalStatuses.has(statusCode);
+}
+
+/**
  * How long to sideline a target, given how many times in a row it has failed.
  *
  * A flat duration makes a chain forget. A target that fails every time was
@@ -69,10 +105,23 @@ export function targetCooldownDurationMs(baseMs: number, failures: number): numb
  * threshold the target is sidelined on the default interval and escalates from
  * there.
  */
-export function markTargetFailure(target: string | undefined, statusCooldownMs: number): void {
+export function markTargetFailure(
+  target: string | undefined,
+  statusCooldownMs: number,
+  statusCode?: number
+): void {
   if (!target) return;
   const previous = cooldowns.get(target);
   const failures = (previous?.failures ?? 0) + 1;
+  // A size refusal needs no streak to establish it: the first one already
+  // proves the request does not fit, and two more cost attempts to learn
+  // nothing. Sideline on the first reading, and do not let a later, shorter
+  // reading shorten it.
+  if (statusCode !== undefined && isRequestShapeRefusal(statusCode)) {
+    const until = Date.now() + requestShapeCooldownMs;
+    cooldowns.set(target, { failures, until: Math.max(previous?.until ?? 0, until) });
+    return;
+  }
   const asked = Number.isFinite(statusCooldownMs) && statusCooldownMs > 0 ? statusCooldownMs : 0;
   const base = asked > 0 ? asked : (failures >= failureStreakBeforeCooldown ? defaultStreakCooldownMs : 0);
   if (base <= 0) {

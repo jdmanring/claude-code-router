@@ -806,6 +806,22 @@ chain exists so that nobody has to.
 The streak is in memory, so a restart re-learns it at a cost of one attempt
 per target. Persisting it is possible and has not been needed.
 
+**A size refusal is not a bet about time, so it does not escalate.** Every other
+refusal clears eventually: a 429 when the window rolls, a 403 when the account
+is topped up, a 500 when the provider recovers. A target that refuses because
+the request is too large refuses the identical request every time, and the
+thirty-minute ceiling meant such an entry rejoined the chain twice an hour for
+the life of the process. 413, 414 and 431 now sideline on the first reading for
+twelve hours, and a success clears it so a raised limit is picked up the same
+day. The list is deliberately only sizes: a 400 or 404 can mean a model was
+briefly withdrawn, so those keep the ordinary escalation and its chance to
+recover.
+
+Measured 2026-09-19: Groq answers 413 to every auto-mode classifier request,
+which runs 170-240KB against its per-request ceiling, while serving ordinary
+traffic normally. That entry had to be taken out of the chain by hand, which is
+exactly the workaround this store exists to make unnecessary.
+
 ## The target cooldown never sees a provider's Retry-After
 
 `cooldownAfterStatus` and `retryDelayAfterStatus` read `retry-after` from the

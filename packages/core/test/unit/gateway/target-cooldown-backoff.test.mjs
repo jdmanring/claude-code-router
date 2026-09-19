@@ -11,6 +11,7 @@ import {
   clearTargetCooldown,
   markTargetCoolingDown,
   isAccountScopedRefusal,
+  isRequestShapeRefusal,
   markTargetFailure,
   providerScopeOf,
   resetTargetCooldownsForTest,
@@ -155,4 +156,59 @@ test("a selector with no model yields no provider scope", () => {
   assert.equal(providerScopeOf("bare-selector"), undefined);
   assert.equal(providerScopeOf(undefined), undefined);
   assert.equal(providerScopeOf("ovh::openai_chat_completions/m"), "ovh::openai_chat_completions/*");
+});
+
+test("a size refusal sidelines on the first reading, without a streak", () => {
+  // Measured 2026-09-19: Groq answers 413 to every auto-mode classifier
+  // request, which runs 170-240KB against its per-request ceiling. Waiting
+  // changes nothing, so the streak rule would spend two more attempts to
+  // learn what the first answer already established.
+  const target = "groq::openai_chat_completions/qwen/qwen3.8-27b";
+  markTargetFailure(target, 0, 413);
+  assert.ok(targetCooldownRemainingMs(target) > 0, "one 413 must sideline the target");
+});
+
+test("a size refusal outlasts the thirty-minute ceiling the other statuses share", () => {
+  // The defect this fixes: escalating backoff caps at thirty minutes, so a
+  // target that can never answer rejoined the chain twice an hour forever.
+  const maxOrdinary = 30 * 60_000;
+  const shaped = "groq::openai_chat_completions/model";
+  const ordinary = "provider::openai_chat_completions/model";
+  markTargetFailure(shaped, 0, 413);
+  for (let i = 0; i < 12; i += 1) markTargetFailure(ordinary, 60_000);
+  assert.ok(targetCooldownRemainingMs(ordinary) <= maxOrdinary,
+    "an ordinary failure must stay under the shared ceiling");
+  assert.ok(targetCooldownRemainingMs(shaped) > maxOrdinary,
+    "a size refusal must outlast it, or the entry rejoins the chain twice an hour");
+});
+
+test("an ordinary status is unaffected by passing the status code", () => {
+  // The negative control. The new argument must change nothing for the
+  // statuses that were already handled, or every provider gets a twelve-hour
+  // cooldown on its first hiccup.
+  const target = "provider::openai_chat_completions/model";
+  markTargetFailure(target, 0, 500);
+  assert.equal(targetCooldownRemainingMs(target), 0, "one 500 must not sideline a provider");
+  markTargetFailure(target, 0, 500);
+  markTargetFailure(target, 0, 500);
+  assert.ok(targetCooldownRemainingMs(target) > 0, "the streak rule must still apply");
+});
+
+test("only size statuses are treated as decided by the request", () => {
+  for (const status of [413, 414, 431]) assert.equal(isRequestShapeRefusal(status), true, String(status));
+  // 400 and 404 can mean a model was briefly withdrawn or a route briefly
+  // misconfigured, so they keep the ordinary escalation and its chance to
+  // recover. Listing them here would retire a provider for half a day on a
+  // transient fault.
+  for (const status of [400, 401, 402, 403, 404, 429, 500, 503]) {
+    assert.equal(isRequestShapeRefusal(status), false, String(status));
+  }
+});
+
+test("answering clears a size refusal, so a raised limit is picked up", () => {
+  const target = "groq::openai_chat_completions/model";
+  markTargetFailure(target, 0, 413);
+  assert.ok(targetCooldownRemainingMs(target) > 0);
+  clearTargetCooldown(target);
+  assert.equal(targetCooldownRemainingMs(target), 0, "a success must return the target to the chain");
 });
