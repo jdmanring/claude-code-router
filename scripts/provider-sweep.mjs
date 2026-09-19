@@ -12,8 +12,12 @@
 // a reading that passed minutes later.
 //
 //   node scripts/provider-sweep.mjs [provider name ...]
-//     --passes N   retry passes over retryable failures (default 3)
-//     --json PATH  write the full result
+//     --passes N     retry passes over retryable failures (default 3)
+//     --json PATH    write the full result
+//     --all-models   try every configured model, not just the lead, and report
+//                    the first that answers. A provider whose lead model is
+//                    withdrawn reads as dead otherwise, which has been wrong
+//                    four times here.
 
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
@@ -38,10 +42,16 @@ const config = JSON.parse(new DatabaseSync(configPath, { readOnly: true })
 const key = String(new DatabaseSync(configPath, { readOnly: true })
   .prepare("select encrypted_key from api_keys where id='local-gateway'").get().encrypted_key);
 
+const ALL_MODELS = argv.includes("--all-models");
+
+// Judging a provider through its own chain attempt is what makes this reliable:
+// the client receives a 200 when a FALLBACK answers, so a provider that has
+// never worked looks like it works from the outside. The trace names which
+// provider the first attempt actually addressed.
 const targets = (config.Providers ?? [])
   .filter((p) => p.enabled !== false && (p.models ?? []).length > 0)
   .filter((p) => only.length === 0 || only.includes(p.name))
-  .map((p) => ({ model: p.models[0], name: p.name }));
+  .map((p) => ({ models: ALL_MODELS ? [...p.models] : [p.models[0]], name: p.name }));
 
 const maxLogId = () => new DatabaseSync(logPath, { readOnly: true })
   .prepare("select max(id) m from request_logs").get().m;
@@ -60,6 +70,20 @@ export function producedNoOutput(body) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Try each of the provider's models in turn and keep the first that answers.
+ * A terminal failure on one model says nothing about the next, so only the
+ * last reading decides retryability when none of them worked.
+ */
+async function attemptProvider(target) {
+  let last;
+  for (const model of target.models) {
+    last = await attempt({ model, name: target.name });
+    if (last.ok) return { ...last, model, triedModels: target.models.indexOf(model) + 1 };
+  }
+  return { ...last, model: target.models[target.models.length - 1], triedModels: target.models.length };
 }
 
 async function attempt(target) {
@@ -129,14 +153,15 @@ async function main() {
     }
     const next = [];
     for (const target of queue) {
-      const r = await attempt(target);
+      const r = await attemptProvider(target);
       results.set(target.name, { ...target, ...r, passes: pass + 1 });
       if (!r.ok && r.retryable && pass < MAX_PASSES) {
         next.push(target);
         if (pass === 0) console.log(`RETRY ${target.name.padEnd(34)} ${r.status}`);
         continue;
       }
-      console.log(`${r.ok ? "OK   " : "FAIL "} ${target.name.padEnd(34)} ${String(r.status).padEnd(18)} ${target.model.slice(0, 40)}`);
+      console.log(`${r.ok ? "OK   " : "FAIL "} ${target.name.padEnd(34)} ${String(r.status).padEnd(18)} ${String(r.model).slice(0, 40)}`
+        + (r.ok && r.triedModels > 1 ? `  (model ${r.triedModels} of ${target.models.length}, the lead does not answer)` : ""));
     }
     queue = next;
   }

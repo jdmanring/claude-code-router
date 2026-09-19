@@ -241,19 +241,20 @@ the live install, and each has its pure judgement pinned by tests run with
 | Question | Instrument | Tests |
 | --- | --- | --- |
 | Which providers does CCR actually reach, and why not | `scripts/provider-sweep.mjs` | 5 |
+| Does any configured model of a provider answer | the same, with `--all-models` | |
 | Which configured model ids does the provider still publish | `scripts/model-catalog-audit.mjs` | 4 |
 | Has anything in the config moved since it was known good | `scripts/config-audit.mjs` | 6 |
 | What did one request actually do | `scripts/ccr-log.mjs` | none |
 | Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 5 |
-| Does a provider have any configured model that answers | `scripts/provider-working-model.mjs` | 5 |
 
 Two properties worth keeping. **Importing any of them must not run the job**:
 the imperative part sits behind an `import.meta.url` entrypoint check, because
 importing the sweep for one helper used to sweep 56 providers. And
 **`model-catalog-audit` spends no quota** - one `GET /models` per provider, no
 inference - so it is the one safe to run while something else is generating
-traffic. `provider-working-model` is the opposite: it calls models directly
-until one answers, so it must never run beside a sweep.
+traffic. `provider-sweep --all-models` tries every configured model instead of
+the lead, which is how a provider whose lead model was withdrawn stops reading
+as dead.
 
 What each one's tests are actually for: `producedNoOutput` decides whether a
 200 counts as a working provider, so its tests pin the cases where it must
