@@ -116,3 +116,49 @@ Orcarouter is worth a second look: the account holds 6 units of free credit
 while every free model still refuses with the GitHub-account message, so the
 gate is on the model tier rather than on the balance.
 
+### The class this audit turned up: usage that arrives in response headers
+
+Groq publishes no usage endpoint. It reports remaining capacity on **every
+response**, in `x-ratelimit-limit-requests`, `x-ratelimit-limit-tokens`,
+`x-ratelimit-remaining-requests`, `x-ratelimit-remaining-tokens` and the two
+matching `-reset` headers. That is the OpenAI convention, so it is not one
+provider's habit but the default for a large part of this list.
+
+CCR cannot consume it. `ProviderAccountHttpJsonConnectorConfig` maps JSONPath
+expressions over a response **body**; there is no header source, and nothing in
+`packages/core/src` reads an `x-ratelimit` header at all.
+
+Worse, the headers are not even recorded. `request_logs.response_headers` is
+populated for all 2,855 rows and holds `{}` for 2,488 of them. Split by
+provider, every row whose provider is the `slug::protocol` form - that is,
+every request the vendored gateway child actually sent upstream - is empty:
+codex-api 661/661, google-gemini 574/574, openrouter 315/315, ollama 214/214,
+nvidia 64/64. The rows that do carry headers are the older in-process path
+(`Gemini` 353 populated). `sanitizeHeaders` is not the cause: it redacts
+sensitive names and passes everything else through, so the headers are absent
+before they reach the store.
+
+Two consequences worth separating. The observability defect stands on its own:
+a column recorded on every request, always empty, describing the response the
+client received. And it is the precondition for header-based usage, which is
+the only usage signal a documented majority of these providers offer.
+
+DEFER(when the response-header capture is fixed): a `headers` mapping source
+for `http-json` connectors, which would bring Groq and every other
+OpenAI-convention provider into usage tracking without a new endpoint.
+
+Status for Groq: `no endpoint`; usage exists but is unreachable by this
+codebase today.
+
+### Cohere - no balance endpoint
+
+Documentation: `https://docs.cohere.com/docs/cohere-faqs` and
+`/reference/about`. Usage is reported as per-response metadata and in the
+dashboard; no account or credit endpoint is published. Trial keys carry 1,000
+calls a month with per-endpoint rate limits (chat 20/min); production keys
+1,000/min and unmetered monthly. The configured compatibility base url
+`https://api.cohere.ai/compatibility/v1` is the documented OpenAI-compatible
+one.
+
+Status: `as documented`, `no endpoint`.
+
