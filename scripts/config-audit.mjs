@@ -43,6 +43,10 @@ function snapshot(source) {
   for (const provider of source.Providers ?? []) {
     providers[provider.name] = {
       apiKey: secretLength(provider.api_key ?? provider.apiKey),
+      // The provider-level base url decides where a request goes when no
+      // capability overrides it, and a malformed one is answered by the host
+      // before any credential is read, so it has to be watched separately.
+      baseUrl: provider.api_base_url ?? provider.apiBaseUrl ?? "(unset)",
       // Type and base URL together. A capability pointed at the wrong URL is
       // still the right type, so recording the type alone reports no drift
       // while the provider is unreachable.
