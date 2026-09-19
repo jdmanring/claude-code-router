@@ -177,7 +177,11 @@ function main() {
 
   if (process.argv.includes("--save")) {
     mkdirSync(path.dirname(baselineFile), { recursive: true });
-    writeFileSync(baselineFile, `${JSON.stringify(current, null, 2)}\n`);
+    // Owner-only, beside a config database that is already 0600. The baseline
+    // holds no credential, because every secret is reduced to its length, but
+    // it does name every provider, base url, capability endpoint, usage
+    // connector and plugin module path.
+    writeFileSync(baselineFile, `${JSON.stringify(current, null, 2)}\n`, { mode: 0o600 });
     console.log(`Baseline saved to ${baselineFile}`);
     process.exit(0);
   }

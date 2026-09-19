@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { botGatewayProfileEnv } from "@ccr/core/agents/bot-gateway/env";
 import { applyClaudeAppGatewayConfig } from "@ccr/core/agents/claude-app/gateway-service";
@@ -401,18 +401,32 @@ export function previousServiceLogFile(configDir = CONFIGDIR): string {
  * is the right shape for a file that must not grow without bound, but it
  * destroys the record of the start that just failed, which is the one anybody
  * would want to read. Renaming first costs one generation of disk and keeps it.
+ *
+ * Both generations are owner-only. The daemon's first line names the
+ * management URL, which carries the web auth token as a query parameter, and
+ * that token authorises the RPC endpoint that reads the whole configuration
+ * including every provider credential. `service.json` holds the same value and
+ * is written 0o600 for that reason; a log at the default 0644 hands it to any
+ * reader of the home directory. The rotated file needs the mode set
+ * explicitly, because a rename carries the old mode with it.
  */
 function openServiceLogFile(): number {
   const file = serviceLogFile();
   mkdirSync(path.dirname(file), { recursive: true });
   try {
     if (existsSync(file)) {
-      renameSync(file, previousServiceLogFile());
+      const previous = previousServiceLogFile();
+      renameSync(file, previous);
+      chmodSync(previous, 0o600);
     }
   } catch {
     // A log that cannot be rotated is still a log worth writing.
   }
-  return openSync(file, "w");
+  const fd = openSync(file, "w", 0o600);
+  // openSync applies the umask to the mode, so a permissive umask would widen
+  // it. Setting it afterwards is what actually guarantees the result.
+  try { chmodSync(file, 0o600); } catch { /* the fd is open and usable either way */ }
+  return fd;
 }
 
 async function startService(options: WebCliOptions): Promise<ServiceState> {
