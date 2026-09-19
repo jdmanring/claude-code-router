@@ -795,3 +795,57 @@ code here runs. The fix belongs in the vendored runtime, next to the response
 headers it already replaces. Until then, treat `defaultTargetCooldownMs` as the
 real cooldown for every provider and do not tune it expecting `Retry-After` to
 override it.
+
+## Fork survey, the full pass
+
+3,156 forks exist, so comparing each is not possible. The filter used was stars
+and recency, which is defensible and worth stating as a limit: **a fork with no
+stars and an old push was never compared**, and something could be hiding
+there. Of the 40 forks with at least one star, eleven carry independent
+commits.
+
+Only two are close enough to current for their code to apply:
+`zhangqinzhong/claude-code-router` (51 ahead, 52 behind, pushed 2026-09-18) and
+`steipete/claude-code-router` (1 ahead, 167 behind). The rest sit 588 to 826
+commits behind, on the pre-3.x architecture, where nothing transfers directly.
+
+### zhangqinzhong: nothing we lack, and a lesson about attribution
+
+Its 51 commits are largely an "AgentRouter" rebrand plus release and doc
+chores. The ones that looked substantial were checked one at a time against our
+own tree, and **every one of them is already here**:
+
+| Commit | Reality |
+| --- | --- |
+| `fix(providers): persist deselected protocols` | upstream's own commit `9387b5b1` by musistudio, 2026-09-09, already in this tree |
+| `fix(meta): enforce output token floor and verify tool IDs` | upstream's `39e4da3a`, already here; also scoped to `openrouter.ai` hosts and `meta/muse-spark*`, and this fork's Meta provider talks to `api.meta.ai` directly, so it would not fire regardless |
+| `fix(gateway): preserve the client query string` | already here, from upstream `b0d59afe` |
+| `fix(observability): let a standalone raw trace record itself` | we solve it differently, with `allowStandaloneRecord` |
+
+Two method notes. The `#NNNN` in those commit messages are **upstream issue**
+numbers, not PRs: 1765, 1780 and 1781 are open upstream issues that upstream
+itself then fixed. And searching upstream by commit *message* missed the query
+string fix entirely, because upstream's commit is titled "Refactor routing
+configuration and improve provider support"; only checking the code found it.
+Search the code, not the subject line.
+
+### steipete: taken, with attribution
+
+`fix: preserve header tokens in route rewrites`, Peter Steinberger, 2026-08-06,
+MIT, the same licence as upstream. It extends route rewrites so header-scope
+rules support array operations: a header such as `anthropic-beta` is treated as
+an ordered comma-delimited token list, so a rule can add or replace one token
+instead of overwriting the whole value, with empty entries trimmed, order
+preserved, duplicates avoided and the header deleted when no tokens remain.
+
+We had `array-replace` for body scope only; `applyHeaderRewrite` was absent.
+Cherry-picked with `-x` onto `ingest/header-token-rewrites` and merged, so the
+authorship and the originating commit id are both in the history rather than in
+a note. One conflict, in the Chinese routing doc, resolved by taking the
+superset that mirrors how the English file resolved. Typecheck clean;
+routing-architecture 24 pass, gateway-claude-code-oauth 3 pass,
+upstream-header-sanitizer 8 pass.
+
+**Everything else in the ecosystem was either upstream's work already in this
+tree, or written against an architecture three hundred to eight hundred commits
+old.**
