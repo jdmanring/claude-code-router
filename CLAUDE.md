@@ -393,9 +393,14 @@ treating it as one cost this repository a working connector. The flag means the
 key itself imposes no cap, not that nothing was granted; a deployment can set
 it while still tracking an allowance. `newApiKeyUsageMeter` now discards only
 when `total_granted` is also zero, which is the case the flag was meant to
-cover. The installed build predates that, so a connector wired against these
-providers writes its `mapping.meters` out rather than naming the preset
-parser.
+cover. The installed build predates that: asked to resolve Tokenreply with
+`parser: "new-api-key-usage"` it returns no meters and the message "API key has
+no dedicated quota limit", so a connector wired against these providers writes
+its `mapping.meters` out rather than naming the preset parser. The mapping also
+does not evaluate arithmetic against a literal, so
+`"$.data.total_granted / 500000"` yields nothing while the bare path works.
+`testProviderAccountConnector` answers both questions before anything is
+saved.
 
 The account endpoint is still the one that reports the balance gating a
 request, and its cost is one value CCR cannot discover: most builds reject `/api/user/self`
