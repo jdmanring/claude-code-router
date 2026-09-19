@@ -280,6 +280,11 @@ stating a tracking verdict is therefore treated as a claim about the running
 config and has to resolve to a configured provider, with blocks saying "not
 configured" exempt so the deliberate not-yet-connected entries stay quiet.
 
+Anchor that test to the value rather than matching the phrase anywhere in the
+line. The document writes a verdict and then a qualifying clause, so a
+substring test exempts "tracked, though the balance meter is not configured"
+and the check goes permanently quiet on exactly the block it exists to find.
+
 That covers one shape and only one: a full provider block carrying a tracking
 line. It says nothing about a provider named in a single prose line inside the
 gates section, which is how Meta and Venice were recorded, so removing those

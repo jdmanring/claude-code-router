@@ -154,3 +154,24 @@ test("a heading directly under the previous block's body is its own block", () =
   assert.ok(headings.has("cerebras"), "a stacked heading must not merge into the block above");
   assert.equal(headings.get("groq").flat().filter((l) => /usage tracking:/.test(l)).length, 1);
 });
+
+test("a trailing 'not configured' clause does not exempt a tracked block", () => {
+  // The document writes a verdict and then a qualifying clause. Matching the
+  // phrase anywhere in the line exempted a block that says tracked, which is
+  // precisely the block the check exists to find.
+  const headings = blockHeadings([
+    "Venice - removed from the config",
+    "    usage tracking: tracked via /api/user/self, though the balance meter is not configured",
+    ""
+  ].join("\n"));
+  assert.deepEqual(orphanedBlocks(headings, new Set()), ["venice"]);
+});
+
+test("the exemption still covers a real not-configured block with a trailing clause", () => {
+  const headings = blockHeadings([
+    "Deepseek - never connected",
+    "    usage tracking: not configured in CCR, so not probed",
+    ""
+  ].join("\n"));
+  assert.deepEqual(orphanedBlocks(headings, new Set()), []);
+});

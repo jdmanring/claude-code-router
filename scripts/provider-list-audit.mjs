@@ -57,7 +57,15 @@ export function blockHeadings(text) {
     // them. What does is what sits above: a wrapped prose line always has
     // another flush-left line directly over it, while a heading opens after a
     // blank line, a dashed rule, a section label, or the indented body of the
-    // block above, since blocks here are stacked with no blank line between. Without this a wrapped
+    // block above, since blocks here are stacked with no blank line between.
+    //
+    // A line ending in a colon is taken as a section label. That is wrong for
+    // a provider heading written with a trailing colon, whose body would be
+    // absorbed by the block above it. The exposure is bounded: a CONFIGURED
+    // provider swallowed this way reports loudly as NO BLOCK, because
+    // headingFor stops resolving it. Only a block for a provider absent from
+    // the config can go quiet, and the not-yet-connected entries that shape
+    // describes are exempt from the orphan check anyway. Without this a wrapped
     // prose line reads as a provider and absorbs the fields of the block below
     // it; requiring the body on the very next line instead would silently drop
     // any heading followed by a blank line, taking both directions of the
@@ -100,7 +108,11 @@ export function orphanedBlocks(headings, described) {
   const orphaned = [];
   for (const [heading, occurrences] of headings) {
     const trackingLines = occurrences.flat().filter((line) => /^\s*usage tracking:/i.test(line));
-    const claimsTheConfig = trackingLines.some((line) => !/not configured/i.test(line));
+    // Anchored to the value, not matched anywhere in the line. The document
+    // writes a verdict then a trailing clause, so a substring test exempts
+    // "tracked, though the balance meter is not configured" and the check goes
+    // permanently quiet on exactly the block it exists to find.
+    const claimsTheConfig = trackingLines.some((line) => !/^\s*usage tracking:\s*not configured/i.test(line));
     if (claimsTheConfig && !described.has(heading)) orphaned.push(heading);
   }
   return orphaned;
