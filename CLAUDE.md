@@ -281,6 +281,32 @@ be quoted about an account. Note also that a provider's "free tier" is often a
 monthly credit allowance rather than zero-cost models, which exhausts and then
 resets without anyone owing anything.
 
+## Local agent OAuth providers
+
+`Claude Code API` and `Codex API` authenticate with the OAuth token belonging to
+the locally installed agent, and their `api_key` is a `ccr-local-agent-*` handle
+rather than a secret. A direct probe using that handle as a bearer token returns
+401 and says nothing about the account, so these two are measurable only through
+CCR.
+
+**An Anthropic OAuth token scoped `user:sessions:claude_code` is refused on
+/v1/messages unless the first system block identifies the request as Claude
+Code.** The refusal is `429 rate_limit_error` with an empty message, which reads
+as an exhausted plan and is not one: the same token answers 200 in the same
+second once the block is present, while `/api/oauth/usage` reports every limit
+at severity `normal`. `local-plugins/gateway-claude-code-oauth-identity.mjs`
+restores the block on any request carrying the `oauth-2025-04-20` beta, and
+leaves a request that already identifies itself untouched. Before reading a 429
+from this provider as a quota, read `getProviderAccountSnapshots`, which calls
+the usage endpoint and reports the real figure.
+
+Both providers store a **snapshot** of the token in `providerPlugins`, taken when
+the provider was imported, and neither re-reads the agent's credential file. The
+Codex entry carries `refreshIfMissingAccessToken`, which fires only when the
+token is absent, so an expired token is kept and used until the provider is
+imported again. Re-import through `importLocalAgentProvider` is the supported
+refresh; editing the stored credential by hand is not.
+
 ## Usage tracking
 
 A provider reports usage only when its config carries an `account` block; a
