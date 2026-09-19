@@ -1014,7 +1014,7 @@ What settles it:
   is no sibling route either.
 - Another user reports the identical symptom on Vercel's own forum, unanswered.
 
-The free plan being real, with its cycle credit largely unspent, was never the contradiction
+The free plan being real, with cycle credit still unspent, was never the contradiction
 it looked like: that credit is for the v0 product, not for an inference API
 that no longer exists. The "requires a Premium or Team plan" reading came from
 search results written while the API was live.
