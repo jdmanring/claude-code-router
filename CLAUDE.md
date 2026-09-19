@@ -320,13 +320,13 @@ same holds for a model withdrawn from a provider's list. Measured 2026-09-19:
 with the config matching its baseline on all 429 values, two entries could
 never answer, `Meta/muse-spark-1.3-contributor` and `VSLLM/glm-5.2-free`.
 
-The catalogue audit also reports a configured model whose catalogue says it
+The catalog audit also reports a configured model whose catalog says it
 cannot produce a chat completion. An embedding, rerank, moderation,
 transcription or image model configured as a chat model can only ever error,
 and it arrives honestly: a provider lists them in the same `/models` response
-as its chat models, so configuring a provider from its catalogue picks them up.
+as its chat models, so configuring a provider from its catalog picks them up.
 SEA-LION carried `BAAI/bge-m3` this way. The check fires **only when the
-catalogue declares the modality**, through `output_modalities`, the
+catalog declares the modality**, through `output_modalities`, the
 `text+image->text` form read on its output side, or an explicit type, and never
 infers from the model id: a model wrongly called non-chat gets deleted from a
 working configuration, so an entry that says nothing stays silent. Note that
@@ -359,7 +359,7 @@ to act on. Two things make it look like the first. `scripts/`-style sweeps read
 `upstream.attempt.outcome`, which is CCR's own attempt after the gateway child
 has chosen a protocol and rewritten the model id, so a 402 there can be either
 of those two faults surfacing as the provider's own error. And the configured model
-is often the paid one while the provider's catalogue lists free siblings that
+is often the paid one while the provider's catalog lists free siblings that
 answer 200 on the same key with no balance.
 
 `node scripts/provider-sweep.mjs` is the instrument. It judges each provider on
@@ -385,9 +385,9 @@ is whether *every* model returns the same error.
 free model.** A provider that grants a little money and also publishes free
 models will happily spend the money on a paid model that a free sibling could
 have answered, and the balance is the scarce thing: it does not refresh on most
-of these accounts, while the free tier resets. Read the catalogue for the free
+of these accounts, while the free tier resets. Read the catalog for the free
 marker rather than assuming the most capable id is the right one, because the
-strongest model in a catalogue is usually the paid one. Measured 2026-09-19 on
+strongest model in a catalog is usually the paid one. Measured 2026-09-19 on
 EvolveX, whose free tier publishes `free-nemotron`, `free-glm-air` and
 `free-step-flash` while the configured model was `moonshotai/kimi-k3`, which is
 in neither list.
@@ -616,7 +616,7 @@ moments later, and guarding those breaks flows that were never the problem.
 
 Two things also make a revert visible rather than silent. Every write logs the
 top-level keys it moved (`[config] write changed: ...` in `ccr-service.log`),
-and `node scripts/config-audit.mjs` diffs the behaviour-deciding parts of the
+and `node scripts/config-audit.mjs` diffs the behavior-deciding parts of the
 config against a saved baseline, naming the exact value that moved. Take the
 baseline with `--save` once the config is known good. Credentials are reduced to
 their length, so the baseline holds no secret.
@@ -680,7 +680,7 @@ and the symbol route produced the caller set.
 | Which symbols are central, where do I start reading | `graphify update . --no-cluster --force && graphify god-nodes`, rebuilt in the same breath, verified by node count and graph mtime |
 | Does this compiled artifact match the runtime | `re_verify_claim` against the binary, with a deliberately false control claim |
 | What does the memory graph look like | `python3 ~/.claude/memory_graph.py --check` |
-| Proving a negative | `command grep`; a plain search honours ignore files and under-reports |
+| Proving a negative | `command grep`; a plain search honors ignore files and under-reports |
 
 Two traps this repository has already sprung. A Serena reference query that
 returns nothing has not proven absence, and its cross-package index does not
@@ -726,7 +726,7 @@ ahead:
 | pass | 996 | 1064 |
 | fail | 5 | 2 |
 
-Upstream's five: the Kimi CLI profile home, the provider model catalogue preset
+Upstream's five: the Kimi CLI profile home, the provider model catalog preset
 aliases, and three Claude Design and bundled-plugin permission tests. This
 fork's two are the **first two of those and nothing else**, so the fork's
 failures are a strict subset of upstream's and the three plugin tests pass here

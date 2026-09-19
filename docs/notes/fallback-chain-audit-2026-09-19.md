@@ -96,7 +96,7 @@ totals. Every "live" count in that table is downstream of a classification the
 instrument cannot make. Zen's entries
 carry free models that refuse every client that is not OpenCode, by the
 provider's own design. One of the four, `Zen/big-pickle`, is not a `-free` id,
-so "none of them can answer" generalises the free-tier refusal past what was
+so "none of them can answer" generalizes the free-tier refusal past what was
 measured. Note also that Zen holds the **same API key as Go and OpenCode Go
 Responses**: it is the same OpenCode account reached a third way, which this
 note elsewhere treats as an unrelated provider.

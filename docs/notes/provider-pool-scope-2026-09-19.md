@@ -49,7 +49,7 @@ rest. Three move the lead: Routeway, SEA-LION and GonkaBroker currently lead
 with a flash-class model while carrying a larger one, which under a request
 budget is capacity given away.
 
-**Literouter is settled, and the catalogue was the reason it could not be
+**Literouter is settled, and the catalog was the reason it could not be
 decided from the configuration.** It publishes 443 models, and the free tier
 includes `mistral-large-3:free`, `glm-5:free` and `deepseek-v3.2:free`, none of
 which was configured. Four candidates were called directly, spaced by the
@@ -94,7 +94,7 @@ All six already lead with the model to keep, so every change here is a deletion.
 | Naga | per-model rate | 13 | none: the three remaining are text-to-speech and transcription |
 | Fastrouter | 10 requests a day per model | 6 | `google/gemma-4-26b-a4b-it` |
 | MegaNova | tiered per model | 7 | `meganova-ai/manta-pro-1.0`, `BruhzWater/Sapphira-L3.3-70b-0.1`, `zai-org/GLM-4.7-Flash` |
-| Google Gemini | per-model | 12 | catalogue answers 404, not established |
+| Google Gemini | per-model | 12 | catalog answers 404, not established |
 | Auriko | per-model | 5 | not established: it publishes 197 models and no pricing at all |
 | Requesty | per upstream | 9 | not established: cost follows the prefix, not a price field |
 | Claude Code API | account plus per-model meters | 4 | not applicable |
@@ -108,7 +108,7 @@ three left are speech.
 
 Auriko and Requesty are open rather than exhausted. A filter keyed on a price
 field reports zero for both, and in neither case does that zero mean the
-catalogue is used up: Auriko publishes no pricing field, and Requesty prices
+catalog is used up: Auriko publishes no pricing field, and Requesty prices
 every model non-zero while charging differently per upstream prefix. Settling
 either needs the provider's own documentation.
 
@@ -133,7 +133,7 @@ paid lane and is the one worth reading the documentation for first.
   claim made here earlier that it "occupies a chain slot" was wrong: it could
   only have been reached had a chain named it.
 - XKIRO's block was the stale side, not the configuration. Both configured ids
-  are published, and the catalogue carries **no DeepSeek model on the free
+  are published, and the catalog carries **no DeepSeek model on the free
   tier at all**: every `deepseek/` id there is paid, so "DeepSeek V4.1 Flash
   (Free)" describes nothing. Asked the same question, `minimax/minimax-m3:free`
   spent 35 output tokens and `qwen/qwen3.8-max:free` spent 39. One sample four
@@ -165,7 +165,7 @@ config-wide count. It was not.
 Nor do the providers still holding several models all fall into the three
 groups named below. **NVIDIA** carries three and **Helixmind** five, and
 neither is metered per model, out of service, or unestablished; they were
-simply never examined. The class rule this section needs is that a provider
+never examined. The class rule this section needs is that a provider
 carrying several models has been shown to meter per model, and these two have
 not been shown anything.
 
@@ -195,7 +195,7 @@ The consolidation chose, for fourteen of the sixteen providers, the best model
 **already configured** rather than the best model the provider **publishes**.
 Literouter showed why that is wrong: its free tier carries 42 models and the
 configured lead was a mid-tier member of a family whose flagship is also free.
-Reading every consolidated provider's catalogue afterwards, at no inference
+Reading every consolidated provider's catalog afterwards, at no inference
 cost, found three more:
 
 - **EvolveX** was configured with `moonshotai/kimi-k3`, which appears in
@@ -222,12 +222,12 @@ free models and the configured one is the strongest. Yolo-Auto publishes two.
 GonkaBroker publishes no free model at all: every id carries a price, from
 $0.20 per million for `zai-org/GLM-5.3-Flash` to $0.25 for the configured
 `MiniMaxAI/MiniMax-M2.7`, so its "$0 Free" is a rate allowance rather than a
-free catalogue and the capable pick stands.
+free catalog and the capable pick stands.
 
 **Where a provider grants a credit balance and also publishes free models, the
 free model wins.** The balance is the scarce side: on most of these accounts it
 does not refresh, while the free tier resets. This is not a preference to
-weigh against capability, because the most capable id in a catalogue is
+weigh against capability, because the most capable id in a catalog is
 normally the paid one, which is exactly how EvolveX ended up configured with a
 model off its free list.
 
@@ -243,7 +243,7 @@ looked per model. Reading what each publishes:
 
 **Auriko** charges pay-as-you-go with zero markup, and its free plan is "$0 plus
 pay-as-you-go API costs". There are no free models: the free tier removes the
-platform fee, not the inference cost, which is why its catalogue of 197 models
+platform fee, not the inference cost, which is why its catalog of 197 models
 publishes no pricing field and a filter keyed on one reported nothing. The
 per-model limit seen earlier ("Rate limit exceeded for model 'glm-4.7-flash'")
 is a rate, and the allowance being spent is one account balance. That makes it
@@ -251,13 +251,13 @@ a money pool carrying five models where it should carry one.
 
 **Requesty**'s free plan is "the full platform, on free models, access to all
 free models, 200 requests per day". The allowance is a count of requests held
-by the account, not a bucket per upstream. The per-upstream behaviour recorded
+by the account, not a bucket per upstream. The per-upstream behavior recorded
 earlier is real but is about which copy of a model is free, not about separate
 allowances: `google/gemma-4-31b-it` answers while `deepinfra/google/gemma-4-31B-it`
 returns a balance error. So it belongs with the request budgets, carrying one
 model rather than nine.
 
-Neither was settled by probing, and neither could have been: the catalogues
+Neither was settled by probing, and neither could have been: the catalogs
 carry no free marker and no usable price. The pricing page answered both in one
 fetch each.
 
@@ -266,7 +266,7 @@ fetch each.
 The single-question probe picked `mistral-large-3:free`, a second one picked
 `glm-5.2:free`, and a battery of four task shapes says both were wrong.
 
-| Model | instruction | reasoning | code | summarise | |
+| Model | instruction | reasoning | code | summarize | |
 | --- | --- | --- | --- | --- | --- |
 | `deepseek-v3.2:free` | pass | fail | pass | pass | 3 of 4 |
 | `mistral-large-3:free` | pass | fail | fail | pass | 2 of 4 |
@@ -307,7 +307,7 @@ database runs in WAL mode with a write-ahead log several megabytes long, and
 `cp config.sqlite` copies only the main file, so each "backup" held whatever
 had last been checkpointed rather than the state at the moment of the copy.
 Both read 216 models while the live database read 148. Use `VACUUM INTO`,
-which serialises the log into the copy, and verify the copy by reading a count
+which serializes the log into the copy, and verify the copy by reading a count
 out of it rather than by its existence.
 
 **Editing the list to mirror the configuration destroys what the list is
@@ -365,11 +365,11 @@ its result. What it found, by class:
 - **Present-tense state in an undated document**, which every applied edit
   then falsified. Both notes now say so at the point where the numbers appear.
 
-**Pricing and catalogue claims in these notes carry no citation**, and several
+**Pricing and catalog claims in these notes carry no citation**, and several
 of the heaviest conclusions rest on them: Auriko's "$0 plus pay-as-you-go API
 costs" and Requesty's "200 requests per day" were each read once from
 `auriko.ai/pricing` and `requesty.ai/pricing` on 2026-09-19 and not cached.
-Those two pages are the whole support for reclassifying both providers. Catalogue
+Those two pages are the whole support for reclassifying both providers. Catalog
 counts (Literouter 443 published and 42 free, Kilo 22 free, Fastrouter 200 and
 67, Naga 16, Auriko 197) came from each provider's `GET /models` on the same
 day and are reproducible with `node scripts/model-catalog-audit.mjs`, which

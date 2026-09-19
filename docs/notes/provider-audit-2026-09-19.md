@@ -27,7 +27,7 @@ Status vocabulary:
 ### Zen (OpenCode Zen free lane) - blocked by vendor policy, not by configuration
 
 Documentation: `https://opencode.ai/docs/zen/`. It lists the model endpoints as
-`/zen/v1/responses` and `/zen/v1/messages` and publishes the catalogue at
+`/zen/v1/responses` and `/zen/v1/messages` and publishes the catalog at
 `/zen/v1/models`. It documents no usage, credits or billing endpoint.
 
 The 403 is a deliberate client-identity gate, not a protocol or credential
@@ -254,7 +254,7 @@ providers is accurate but incomplete.
 per provider, diffing the configured ids against what the provider publishes.
 No inference, no quota spent, so it is safe to run when a sweep is not. First
 run over 56 providers: 45 clean, 5 carrying unlisted ids (9 in total), 6 whose
-catalogue could not be read.
+catalog could not be read.
 
 Unlisted ids found: Huggingface 5 (`inclusionAI/Ling-3.0-flash-Fin:novita`,
 `inclusionAI/Ling-3.0-flash-VL:novita`, `zai-org/GLM-5.3-Flash:zai-org`,
@@ -271,7 +271,7 @@ Cross-checking a new tool's output against a measurement already in hand is what
 caught it.
 
 `scripts/provider-sweep.test.mjs` (5 tests) pins `producedNoOutput`, the one
-piece of judgement in the sweep, including the cases where it must **not** fire:
+piece of judgment in the sweep, including the cases where it must **not** fire:
 an unparseable body, an HTML error page, a truncated read and a non-numeric
 token count are not declines. Reporting any of those as a decline would turn a
 transport problem into a provider verdict.
@@ -326,7 +326,7 @@ holds `claude-code.ts`, `codex.ts`, `grok.ts`, `kimi.ts`, `zcode.ts` **and
 `opencode.ts`** (688 lines), which knows both endpoints
 (`https://opencode.ai/zen/v1`, `/zen/go/v1`), reads OpenCode's credential from
 its config files, `OPENCODE_AUTH_CONTENT`, or `OPENCODE_API_KEY`, and imports
-it as a provider with its model catalogue.
+it as a provider with its model catalog.
 
 What it imports is an **API key**. That is the whole difference from the Codex
 and Claude Code providers: those borrow a locally installed agent's OAuth token
@@ -483,7 +483,7 @@ unroutable by CCR whatever the plan. Its credit is now tracked.
 was not something any source said. What is established is the message itself,
 `billing_not_configured` asking for a payment method, and that it is account
 level rather than per model. No pricing page for `api.meta.ai` was found, and
-the model is named `-contributor`, which suggests a programme rather than a
+the model is named `-contributor`, which suggests a program rather than a
 free-forever tier. Left as not established, for James to read their billing
 page before adding a card.
 
@@ -610,7 +610,7 @@ Status for all five: `as documented`, `no endpoint`.
 
 ### NVIDIA - the credits model this list assumed no longer exists
 
-Documentation and their developer forum: the API catalogue on
+Documentation and their developer forum: the API catalog on
 `build.nvidia.com` used to grant 1,000 credits on signup and up to 5,000 with a
 business email. **That credits system was withdrawn.** It is now a trial
 experience whose rate varies per model and with the number of concurrent users,
@@ -719,9 +719,9 @@ a fault, but a fastify 6 bump will break that runtime until the vendor moves to
 
 ## The nine unlisted model ids, resolved by calling each one
 
-The catalogue audit reported nine ids configured but absent from their
+The catalog audit reported nine ids configured but absent from their
 provider's `/models`. Each was called directly rather than removed on the
-catalogue's word, and **six of the nine answer**:
+catalog's word, and **six of the nine answer**:
 
 | Id | Result |
 | --- | --- |
@@ -731,9 +731,9 @@ catalogue's word, and **six of the nine answer**:
 | VSLLM `glm-5.2-free` | 503 "No available channel for model glm-5.2-free under group free" |
 | Tokeness `glm-5.3-free` | 400 "Failed to get available channel" |
 
-That is the calibration earning itself: treating the catalogue as a removal
+That is the calibration earning itself: treating the catalog as a removal
 list would have deleted six working models, five of them Hugging Face routing
-aliases that the router simply does not enumerate.
+aliases that the router does not enumerate.
 
 Three repairs, each made only after the id was called:
 
@@ -811,7 +811,7 @@ commits behind, on the pre-3.x architecture, where nothing transfers directly.
 
 ### zhangqinzhong: nothing we lack, and a lesson about attribution
 
-Its 51 commits are largely an "AgentRouter" rebrand plus release and doc
+Its 51 commits are an "AgentRouter" rebrand plus release and doc
 chores. The ones that looked substantial were checked one at a time against our
 own tree, and **every one of them is already here**:
 
@@ -832,7 +832,7 @@ Search the code, not the subject line.
 ### steipete: taken, with attribution
 
 `fix: preserve header tokens in route rewrites`, Peter Steinberger, 2026-08-06,
-MIT, the same licence as upstream. It extends route rewrites so header-scope
+MIT, the same license as upstream. It extends route rewrites so header-scope
 rules support array operations: a header such as `anthropic-beta` is treated as
 an ordered comma-delimited token list, so a rule can add or replace one token
 instead of overwriting the whole value, with empty entries trimmed, order
@@ -899,7 +899,7 @@ and the header never arrives.
 Nothing of oakimov's code was copied. The one commit taken from any fork this
 session is Peter Steinberger's, cherry-picked with `-x` so his authorship and
 the originating commit id are in the history. Both forks are MIT, the same
-licence as upstream.
+license as upstream.
 
 ## Verifying the reclaim as a change on a write path
 
@@ -923,7 +923,7 @@ nothing, and the reader kept answering afterwards.
 almost all of it was freelist, 566 ms when almost all of it was live.
 
 That last number makes the ratio threshold load-bearing rather than decorative.
-The 64 MB byte floor alone would let a large, mostly-live database qualify on
+The 64 MB byte floor alone would let a large database whose pages are nearly all live qualify on
 its waste and pay a multi-second write pause; requiring half the file to be
 free bounds the live set that has to be copied. The prune is gated to once a
 day, so the worst case is one bounded pause per day. The reasoning is now in
@@ -1006,7 +1006,7 @@ What settles it:
 - `/v1/models` is 404, while `/v1/chats`, `/v1/deployments`, `/v1/user`,
   `/v1/user/billing` and `/v1/rate-limits` all answer 200. Authentication is
   fine; that one path is not served.
-- The Vercel AI Gateway catalogue, 372 models, contains no v0 entry, so there
+- The Vercel AI Gateway catalog, 372 models, contains no v0 entry, so there
   is no sibling route either.
 - Another user reports the identical symptom on Vercel's own forum, unanswered.
 
