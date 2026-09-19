@@ -311,6 +311,7 @@ column: `for f in scripts/*.test.mjs local-plugins/*.test.mjs; do node --test "$
 | What did one request actually do | `scripts/ccr-log.mjs` | 9 |
 | Which providers have answered nothing lately | the same, with `--usage` | |
 | Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 14 |
+| Can a model actually serve the Bash classifier | `scripts/classifier-replay.mjs` | 11 |
 
 Two properties worth keeping. **Importing any of them except `ccr-log.mjs`
 must not run the job**:
@@ -416,6 +417,43 @@ first and exited 0 on an empty window, so asking for a trace outside the
 window printed "No matching requests." while the trace existed. A wrong
 reading that looks exactly like a right one is the case the reasoning missed.
 It is driven as a subprocess against a throwaway log via `CCR_LOG_DB`.
+
+## The Bash auto-mode classifier
+
+Auto mode runs a safety check before shell commands and network requests, and
+in this configuration it is a routed request like any other: it blocks the
+action it judges, so its latency lands on every Bash call and its failure halts
+work. `profile.profiles[].routing.rules` carries a rule matching
+`request.body.system` against the classifier's own prompt, which is why the
+`sonnet` slot the client addresses is irrelevant to where it lands.
+
+Three properties decide which models can serve it, and none is visible from a
+model's usual specification. The body is 170-240KB, about 60K tokens, so a
+small context window disqualifies a model outright. The output contract is
+`<block>yes|no</block>` with `</block>` as a stop sequence, so a well-formed
+answer arrives with no closing tag and a guard model's own `safe/unsafe`
+taxonomy does not satisfy it. And the check is **two stage**, `xml_s1` then
+`xml_s2` in the client, so one decision costs two model calls.
+
+`scripts/classifier-replay.mjs` is the instrument. Every classifier call CCR
+has served is stored with the verdict the chain returned, so a candidate is
+judged on real traffic rather than a synthetic prompt. What it establishes is
+agreement with the incumbent rather than correctness, because the recorded
+verdicts came from a chain entry and not from an oracle.
+
+Read a stored body from `request_body_ref`, never from `request_body_text`.
+The text column is a preview with the middle elided and a marker inserted
+carrying raw newlines, so it is not JSON: 683 of 956 stored bodies fail to
+parse for that reason alone and every classifier body is among them. Nothing is
+lost, and `request_body_truncated` reads 0 because nothing was truncated.
+
+Measured 2026-09-19 by replaying one real 174KB request. Groq answers 413
+"Request too large" on every attempt, which is structural rather than
+transient, so the target cooldown can never learn it and the entry costs an
+attempt on every walk. MegaNova answers 429 once its **per model, per day**
+free quota is spent, which the classifier's own volume is enough to do. That
+is the argument for spreading the chain across separate accounts rather than
+adding models to one.
 
 ## Provider triage
 
