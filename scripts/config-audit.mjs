@@ -170,7 +170,32 @@ export function danglingChainEntries(source) {
       }
     }
     for (const rule of profile.routing?.rules ?? []) {
-      for (const entry of rule.fallback?.models ?? []) {
+      // `rewrite` is a directive object, not a string: the router reads
+      // `rewrite.value`. Assigning a bare string leaves `.value` undefined, so
+      // the rewrite silently stops firing and the rule's first attempt
+      // addresses whatever the client sent instead of the chain's head. The
+      // rule still succeeds, which is why nothing else reports it.
+      const chain = rule.fallback?.models ?? [];
+      if (rule.rewrite !== undefined && rule.rewrite !== null) {
+        const value = rule.rewrite?.value;
+        if (typeof value !== "string" || value === "") {
+          dangling.push({
+            entry: JSON.stringify(rule.rewrite),
+            reason: "rewrite carries no .value, so it never fires",
+            rule: rule.id
+          });
+        } else if (chain.length > 0 && value !== String(chain[0])) {
+          // The convention here is that the rewrite names the head of the
+          // chain. A mismatch sends the first attempt somewhere the chain does
+          // not list, which reads as an extra entry nobody configured.
+          dangling.push({
+            entry: value,
+            reason: `rewrite does not match the head of its chain (${chain[0]})`,
+            rule: rule.id
+          });
+        }
+      }
+      for (const entry of chain) {
         const text = String(entry);
         const provider = names.find((name) => text.startsWith(`${name}/`));
         if (!provider) dangling.push({ entry: text, reason: "no such provider", rule: rule.id });

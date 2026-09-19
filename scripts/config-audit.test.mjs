@@ -135,3 +135,43 @@ test("a slot that resolves is not reported", () => {
   };
   assert.deepEqual(danglingChainEntries(config), []);
 });
+
+/**
+ * A rule whose rewrite was clobbered with a bare string. The router reads
+ * `rewrite.value`, so the directive stops firing while the rule keeps
+ * succeeding down its chain, and nothing else in the audit reports it. This
+ * happened while reordering the classifier chain: the rewrite read `null`
+ * afterwards and only the baseline diff showed it.
+ */
+const ruleConfig = (rewrite, models = ["Example/a", "Example/b"]) => ({
+  ...providerConfig(),
+  profile: { profiles: [{ name: "p", routing: { rules: [{ fallback: { models }, id: "r1", rewrite }] } }] }
+});
+
+test("a rewrite assigned a bare string is reported, not silently inert", () => {
+  const found = danglingChainEntries(ruleConfig("Example/a"));
+  assert.equal(found.length, 1, "a string rewrite has no .value and must be reported");
+  assert.match(found[0].reason, /never fires/);
+});
+
+test("a rewrite naming a model that is not its chain head is reported", () => {
+  const found = danglingChainEntries(ruleConfig({ key: "request.body.model", operation: "set", value: "Example/b" }));
+  assert.equal(found.length, 1);
+  assert.match(found[0].reason, /head of its chain/);
+  assert.equal(found[0].entry, "Example/b");
+});
+
+test("a correctly shaped rewrite matching the chain head is silent", () => {
+  // The negative control for both checks above: without it, a check that
+  // fired on everything would pass the two tests that expect it to fire.
+  assert.deepEqual(
+    danglingChainEntries(ruleConfig({ key: "request.body.model", operation: "set", value: "Example/a" })),
+    []
+  );
+});
+
+test("a rule with no rewrite at all is silent", () => {
+  // Most rules carry none, so a check that treated absent as broken would
+  // report every one of them.
+  assert.deepEqual(danglingChainEntries(ruleConfig(undefined)), []);
+});
