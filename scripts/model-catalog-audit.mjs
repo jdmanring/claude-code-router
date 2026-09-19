@@ -47,10 +47,14 @@ export function catalogueIds(payload) {
 // The gateway drops a leading segment that repeats the protocol family, and
 // some providers list an id the configured form abbreviates. Compare on the
 // last segment too rather than reporting a naming difference as a withdrawal.
-export function isPublished(configured, published) {
+export function publishedTails(published) {
+  return new Set([...published].map((id) => id.split("/").pop()));
+}
+
+export function isPublished(configured, published, tails = publishedTails(published)) {
   if (published.has(configured)) return true;
   const tail = configured.split("/").pop();
-  return published.has(tail) || [...published].some((id) => id.split("/").pop() === tail);
+  return published.has(tail) || tails.has(tail);
 }
 
 async function catalogue(provider) {
@@ -85,7 +89,8 @@ async function main() {
       continue;
     }
     const published = new Set(read.ids);
-    const missing = (provider.models ?? []).filter((m) => !isPublished(m, published));
+    const tails = publishedTails(published);
+    const missing = (provider.models ?? []).filter((m) => !isPublished(m, published, tails));
     results.push({ name: provider.name, status: missing.length === 0 ? "ok" : "stale",
       catalogueSize: read.ids.length, configured: (provider.models ?? []).length, missing });
     const label = missing.length === 0 ? "OK  " : "STALE";

@@ -63,11 +63,6 @@ export function blockHeadings(text) {
   return headings;
 }
 
-/** Every line of every appearance, for checks that do not care where it sat. */
-export function blockText(occurrences) {
-  return occurrences.flat().join(" ");
-}
-
 export function headingFor(providerName, headings) {
   const name = providerName.toLowerCase();
   if (headings.has(name)) return name;
@@ -89,7 +84,7 @@ function main() {
     const heading = headingFor(provider.name, headings);
     if (!heading) { missing.push(provider.name); continue; }
     const occurrences = headings.get(heading);
-    const says = /usage tracking:\s*tracked/i.test(blockText(occurrences));
+    const says = /usage tracking:\s*tracked/i.test(occurrences.flat().join(" "));
     const is = provider.account?.enabled === true;
     if (says !== is) disagree.push(`${provider.name}: list says tracked=${says}, config says ${is}`);
     // Two tracking lines in ONE appearance means one is stale, and which wins

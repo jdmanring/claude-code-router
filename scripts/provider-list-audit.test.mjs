@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { blockHeadings, blockText, headingFor, listNameAliases } from "./provider-list-audit.mjs";
+import { blockHeadings, headingFor, listNameAliases } from "./provider-list-audit.mjs";
 
 const sample = [
   "SOME SECTION HEADING:",
@@ -31,8 +31,8 @@ test("an all-caps section heading is not mistaken for a provider", () => {
 
 test("indented lines belong to the block above them", () => {
   const headings = blockHeadings(sample);
-  assert.match(blockText(headings.get("groq")), /qwen3\.8-27b/);
-  assert.ok(!blockText(headings.get("groq")).includes("/v1/credits"), "a block must not absorb the next one");
+  assert.match(headings.get("groq").flat().join(" "), /qwen3\.8-27b/);
+  assert.ok(!headings.get("groq").flat().join(" ").includes("/v1/credits"), "a block must not absorb the next one");
 });
 
 test("a provider listed twice keeps each appearance separate", () => {
