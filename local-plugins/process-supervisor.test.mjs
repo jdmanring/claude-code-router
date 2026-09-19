@@ -211,3 +211,49 @@ test("an entry already answering its readiness url is not started again", async 
     server.close();
   }
 });
+
+test("a command that does not exist fails the start instead of reporting it", async () => {
+  // The spawn error was logged and nothing read the line, so the dead child
+  // went onto the started list, setup() returned an onStop, and every later
+  // process started as though its predecessor were running.
+  const logger = recorder();
+  await assert.rejects(
+    () => setup(hostContext(logger, entry([{ command: "ccr-no-such-command-exists", name: "ghost" }]))),
+    /ghost could not be started/,
+    "a spec with no readyUrl must still fail when the command does not exist"
+  );
+});
+
+test("a missing command is reported as a spawn failure, not a readiness timeout", async () => {
+  // With a readyUrl, ENOENT emits "error" and never "exit", so exitCode and
+  // signalCode both stay null and the poll ran to its deadline before blaming
+  // readiness for a command that was never there.
+  const logger = recorder();
+  const began = Date.now();
+  await assert.rejects(
+    () => setup(hostContext(logger, entry([{
+      command: "ccr-no-such-command-exists",
+      name: "ghost",
+      readyTimeoutMs: 30_000,
+      readyUrl: "http://127.0.0.1:59999/health"
+    }]))),
+    /ghost could not be started/
+  );
+  assert.ok(Date.now() - began < 5_000, "it waited for the readiness deadline instead of failing at once");
+});
+
+test("a process that starts and then dies is still reported against its readiness", async () => {
+  // The control for the two above: a real command that exits must not be
+  // reported as a spawn failure, or the message names the wrong cause.
+  const logger = recorder();
+  await assert.rejects(
+    () => setup(hostContext(logger, entry([{
+      args: ["-e", "process.exit(3)"],
+      command: NODE,
+      name: "quitter",
+      readyTimeoutMs: 4_000,
+      readyUrl: "http://127.0.0.1:59999/health"
+    }]))),
+    /quitter exited with code 3 before it became ready/
+  );
+});

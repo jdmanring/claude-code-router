@@ -64,6 +64,15 @@ async function alreadyServing(readyUrl) {
 }
 
 async function waitUntilReady(spec, child, logger) {
+  // Node emits exactly one of "spawn" and "error", so awaiting that settles
+  // whether the process exists before anything else is decided. Without it a
+  // spec with no readyUrl returned at once and a child that never started was
+  // recorded as running, and a spec with one polled for the full timeout and
+  // reported a readiness failure for what was a missing command.
+  const spawnFailure = await child.spawned;
+  if (spawnFailure) {
+    throw new Error(`${spec.name} could not be started: ${spawnFailure.message}`);
+  }
   if (!spec.readyUrl) {
     return;
   }
@@ -94,6 +103,12 @@ function startProcess(spec, logger) {
   child.stdout?.on("data", (chunk) => logger?.info?.(`[${spec.name}] ${String(chunk).trimEnd()}`));
   child.stderr?.on("data", (chunk) => logger?.warn?.(`[${spec.name}] ${String(chunk).trimEnd()}`));
   child.on("error", (error) => logger?.error?.(`[${spec.name}] failed to spawn: ${error.message}`));
+  // Recorded, not only logged. A line in a log that no caller reads cannot
+  // stop a dead child being pushed onto the started list.
+  child.spawned = new Promise((resolve) => {
+    child.once("spawn", () => resolve(undefined));
+    child.once("error", (error) => resolve(error));
+  });
   return child;
 }
 
