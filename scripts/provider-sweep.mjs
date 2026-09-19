@@ -155,6 +155,10 @@ async function main() {
     for (const target of queue) {
       const r = await attemptProvider(target);
       results.set(target.name, { ...target, ...r, passes: pass + 1 });
+      // Written per provider, not once at the end. A sweep is long enough to
+      // be interrupted, and a ledger produced only on completion means an
+      // interrupted run spent its requests and recorded nothing.
+      if (OUT) fs.writeFileSync(OUT, JSON.stringify([...results.values()], null, 1));
       if (!r.ok && r.retryable && pass < MAX_PASSES) {
         next.push(target);
         if (pass === 0) console.log(`RETRY ${target.name.padEnd(34)} ${r.status}`);
@@ -168,7 +172,6 @@ async function main() {
 
   const all = [...results.values()];
   const ok = all.filter((r) => r.ok);
-  if (OUT) fs.writeFileSync(OUT, JSON.stringify(all, null, 1));
   console.log(`\nreachable: ${ok.length}/${all.length}`);
   const recovered = all.filter((r) => r.ok && r.passes > 1);
   if (recovered.length > 0) {
