@@ -192,6 +192,29 @@ Use this mode when the provider has a balance or quota endpoint that returns a c
 | Test usage request | Requests and parses the usage endpoint before saving. |
 | Response fields | Lists selectable paths from the response. Buttons such as `Balance rem`, `Balance total`, `Balance used`, `Sub rem`, `Sub limit`, and `Reset` fill the matching field. |
 
+#### Rolling request windows
+
+Some usage APIs require a caller-supplied time range. In the URL or JSON body, use these placeholders in an `HTTP JSON request` connector:
+
+| Placeholder | Value |
+| --- | --- |
+| `{{start_time}}` / `{{end_time}}` | Unix timestamp in seconds |
+| `{{start_time_ms}}` / `{{end_time_ms}}` | Unix timestamp in milliseconds |
+| `{{start_iso}}` / `{{end_iso}}` | ISO 8601 timestamp |
+
+CCR replaces the placeholders at each usage refresh. The default window is the previous 30 days. Set `windowSeconds` in raw connector JSON to use another positive window length, such as `18000` for five hours. The same replacement applies to nested strings in a JSON body. Unknown placeholders are left unchanged.
+
+Example:
+
+```json
+{
+  "type": "http-json",
+  "endpoint": "https://api.vendor.example.com/usage?start={{start_time}}&end={{end_time}}",
+  "windowSeconds": 18000,
+  "mapping": { "meters": [] }
+}
+```
+
 ### Browser request
 
 Use this mode when the usage endpoint depends on a website login session, cookies, or localStorage. It is saved as the underlying `webcontent-json` connector and is available only in CCR Desktop. The endpoint response must still be JSON so the fields below can map it with CCR's lightweight JSONPath syntax.

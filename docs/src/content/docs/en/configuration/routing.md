@@ -496,6 +496,12 @@ Before moving to the next attempt, CCR waits for every fallback-triggering failu
 
 **Fallback targets** also switches on `4xx` because model-not-found, auth, or provider-side rejection errors may only affect the current target. If the fallback model works, the request can still succeed.
 
+### Target cooldowns
+
+A `402` or `429` response temporarily cools down the failed model target so later requests can skip it while its quota or rate window recovers. CCR uses the upstream `Retry-After` value when it is a positive duration; otherwise the default cooldown is 60 seconds. The final fallback target is still attempted, even when it is cooling down.
+
+Cooldown is separate from per-request retry backoff: backoff waits before the next attempt in the current request, while cooldown prevents the same target from being selected first on later requests. The trace and `ccr-log` report show targets skipped for cooldown.
+
 ## How to configure
 
 ### Global fallback

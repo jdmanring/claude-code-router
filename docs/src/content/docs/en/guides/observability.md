@@ -27,3 +27,19 @@ The Logs page supports filtering by status, provider, model, credential, request
 Regular request logs are kept locally for the current day. When the local date changes, the next request-log read or write cleans up the previous day's regular logs; they are useful for same-day troubleshooting, not long-term audit archiving.
 
 See the [logs and observability configuration reference](../../configuration/observability/) for the full set of switches and page capabilities.
+
+## Inspect logs from the command line
+
+The repository includes a read-only SQLite summarizer for diagnosing routing without opening the management UI:
+
+```sh
+node scripts/ccr-log.mjs
+node scripts/ccr-log.mjs --limit 200
+node scripts/ccr-log.mjs --since 6516
+node scripts/ccr-log.mjs --trace 6512
+node scripts/ccr-log.mjs --errors
+```
+
+The default view summarizes the last 50 requests, including upstream attempts, backoff time, and targets skipped while cooling down. `--trace` prints the attempts for one request, including provider, model, status, errors, waits, and cooldown skips. `--errors` groups distinct upstream response bodies from the selected rows.
+
+The script reads `~/.claude-code-router/app-data/request-logs.sqlite` by default. Set `CCR_LOG_DB` to inspect another database, or use `CCR_INTERNAL_APP_DATA_DIR` when working with an isolated CCR data directory. It never writes to the database. If the database is missing, the command exits with an error instead of returning an empty report.

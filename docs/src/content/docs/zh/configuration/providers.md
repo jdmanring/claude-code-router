@@ -173,6 +173,29 @@ OpenCode 导入会同时读取本机认证文件、OpenCode 配置和模型目�
 | 测试用量请求 | 立即请求用量接口并解析映射结果，方便在保存前验证字段路径。 |
 | 响应字段 | 测试后列出响应 JSON 中可选字段。点击 `余额剩余`、`余额总额`、`余额已用`、`订阅剩余`、`订阅上限`、`重置时间` 可以把该路径快速填入对应字段。 |
 
+#### 滚动时间窗口
+
+有些用量接口要求调用方提供时间范围。可以在 `HTTP JSON 请求` connector 的 URL 或 JSON 请求体中使用以下占位符：
+
+| 占位符 | 值 |
+| --- | --- |
+| `{{start_time}}` / `{{end_time}}` | 秒级 Unix 时间戳 |
+| `{{start_time_ms}}` / `{{end_time_ms}}` | 毫秒级 Unix 时间戳 |
+| `{{start_iso}}` / `{{end_iso}}` | ISO 8601 时间 |
+
+CCR 会在每次刷新用量时替换这些占位符。默认窗口是最近 30 天。可以在 raw connector JSON 中设置 `windowSeconds` 使用其他正数窗口，例如 `18000` 表示 5 小时。JSON 请求体中的嵌套字符串也会替换；未知占位符会保持不变。
+
+示例：
+
+```json
+{
+  "type": "http-json",
+  "endpoint": "https://api.vendor.example.com/usage?start={{start_time}}&end={{end_time}}",
+  "windowSeconds": 18000,
+  "mapping": { "meters": [] }
+}
+```
+
 ### 浏览器请求
 
 该模式适合用量接口依赖网页登录态、Cookie 或 localStorage 的情况。它保存为底层 `webcontent-json` connector，只在 CCR Desktop 可用；接口响应仍需是 JSON，后续字段映射继续使用下方的轻量 JSONPath。

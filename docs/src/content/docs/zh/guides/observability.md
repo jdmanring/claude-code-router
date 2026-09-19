@@ -27,3 +27,19 @@ lead: 首次接入 CCR 后的验证步骤：在设置中打开请求日志与 Ag
 普通请求日志只保留本地当天的数据。以本地日期为界，进入第二天后，下一次读取或写入请求日志时会清理前一天的普通请求日志；长期留存依赖导出或另行归档。
 
 各开关和面板能力的完整说明见 [日志与可观测性配置参考](../../configuration/observability/)。
+
+## 在命令行检查日志
+
+仓库内置了一个只读的 SQLite 汇总脚本，可以在不打开管理 UI 的情况下诊断路由：
+
+```sh
+node scripts/ccr-log.mjs
+node scripts/ccr-log.mjs --limit 200
+node scripts/ccr-log.mjs --since 6516
+node scripts/ccr-log.mjs --trace 6512
+node scripts/ccr-log.mjs --errors
+```
+
+默认视图汇总最近 50 条请求，包括上游尝试、回退等待时间，以及因冷却而跳过的目标。`--trace` 展示单条请求的尝试明细，包括供应商、模型、状态、错误、等待和冷却跳过。`--errors` 会按选中记录汇总不同的上游响应体。
+
+脚本默认读取 `~/.claude-code-router/app-data/request-logs.sqlite`。可以设置 `CCR_LOG_DB` 检查另一个数据库；使用隔离的 CCR 数据目录时，也可以设置 `CCR_INTERNAL_APP_DATA_DIR`。脚本不会写入数据库。如果数据库不存在，命令会报错退出，不会把它当成空报告。
