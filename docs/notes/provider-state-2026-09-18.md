@@ -71,3 +71,46 @@ account. Their real reading is the 429 seen through CCR.
 Each of the twelve providers still unreachable returned the *same* error on
 every one of its configured models, which is what distinguishes an account or
 infrastructure gate from a model that has moved.
+
+
+## Local agent OAuth, added 2026-09-19
+
+Two separate faults, both reading as something they were not.
+
+**Claude Code API answered 429 with a full plan.** Anthropic refuses a token
+scoped `user:sessions:claude_code` on `/v1/messages` unless the first system
+block identifies the request as Claude Code, and the refusal is
+`rate_limit_error` with an empty message. Measured on one token within a few
+seconds: 200 with the block, 429 without, while `/api/oauth/usage` reported
+session 1%, weekly 40%, every limit `severity: normal`, tier
+`default_claude_max_20x`.
+
+It is upstream's, not this configuration's. Nothing under `packages/` adds the
+block. A top-level Claude Code turn carries it already, which is why the primary
+flow works; a subagent, a cross-agent chain fallback and any internal call do
+not. Request 8682 in the log is exactly that case, a sonnet-slot call from the
+claude profile with no block. The provider sits at the end of all three chains,
+positions 9/10, 25/28 and 32/41, so the failure arrives once everything else has
+already failed.
+
+Staged for upstream as `fix/claude-code-oauth-identity-system-block`, three
+files off `origin/main`.
+
+**Codex API answered 401 with a freshly refreshed token.** Its stored access
+token is a snapshot from import time, the vendored runtime's
+`refreshIfMissingAccessToken` fires only when the token is absent, and nothing
+re-reads `auth.json`. After the on-disk token was refreshed the stored copy
+still did not match it, and the provider stayed 401 until the provider was
+re-imported.
+
+Staged for upstream as `fix/codex-oauth-stale-access-token`, two files off
+`origin/main`.
+
+After re-import, Codex answers 429 rather than 401, and the usage endpoint
+called with the current token confirms the quota is genuinely spent: primary
+100% used, 0 remaining, resets 2026-10-13, no manual resets available. That one
+is real and waits for the reset.
+
+Both branches are based directly on `origin/main` and carry only their own fix,
+unlike the older `fix/*` branches here, which were cut from the fork and carry
+its whole history.
