@@ -63,3 +63,56 @@ the plan gate looks like from outside.
 Status: `needs account action` (a v0 Premium or Team plan). Configuration is
 `as documented`.
 
+### Electronhub - the 402 is a spent Neutrino balance, and the meter does not show it
+
+Documentation: `https://docs.electronhub.ai/billing/model-access` and
+`/billing/credits`. Three model classes: `:free` models "use **Neutrinos**
+instead of credits" and need no subscription; freemium models deduct credits;
+premium models need a subscription. Credits refill weekly, Sundays at 21:00
+UTC, by subscription tier. The documented 402 body is "Insufficient balance.
+Please wait for the next weekly refill or purchase more tokens".
+
+The configured lead model is `deepseek-v4-flash:free`, so it spends Neutrinos,
+and the account has credits (0.25 on the meter here) while still answering 402.
+The existing connector reports credits and token counters but no Neutrino
+figure, which is why the meter reads healthy while the provider refuses. The
+documentation names no endpoint for the Neutrino balance; that is the gap to
+close if one is ever published.
+
+Status: `as documented`, recovery is automatic on the weekly refill.
+
+### OVH - configuration matches the published endpoint
+
+Documentation: `https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/`
+confirms `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` as the
+OpenAI-compatible base url, which is what is configured. No usage or quota
+endpoint is published. Anonymous access and its shared limit are covered in
+project memory and are not revisited here.
+
+Status: `as documented`, `no endpoint`.
+
+## Account meters as read on 2026-09-19
+
+Eighteen providers reporting. Recorded because several of these numbers explain
+a sweep result that otherwise reads as a fault:
+
+| Provider | Reading |
+| --- | --- |
+| Claude Code API | 5h 93%, 7d 58% remaining |
+| Codex API | primary quota 0%, resets 2026-10-13 |
+| OpenRouter | a balance in USD |
+| Tokenreply | a balance meter in USD |
+| XKIRO | a daily token allowance free tokens |
+| ZyloAI | a daily token allowance daily tokens, a daily request allowance |
+| Go, OpenCode Go Responses | 5h 100%, weekly 100%, monthly 80% |
+| Yolo-Auto | 10 of 15 daily requests |
+| Electronhub | credits 0.25, Neutrino balance not exposed |
+| Orcarouter | paid balance 0, **free credit 6** |
+| Vercel | a negative balance |
+| Venice, AIHubMix, Tokenrouter, Bazaarlink | zero balance |
+| VSLLM | allowance spent, 0 of 1000 |
+
+Orcarouter is worth a second look: the account holds 6 units of free credit
+while every free model still refuses with the GitHub-account message, so the
+gate is on the model tier rather than on the balance.
+
