@@ -103,3 +103,60 @@ This is the same failure the `allow[7]` repair addressed from the other side: a
 rule that is true of one context being applied in every context. It is worth
 counting rather than working around, because the rate is what decides whether
 the control is affordable.
+
+## Caching: what is happening, and what is not
+
+Measured 2026-09-19 by sweeping all 12,692 stored request bodies for a
+`"cache_control"` JSON key: **none carries one.** That includes the seven sent
+to `claude-code-api::anthropic_messages`, where explicit `cache_control` is the
+only caching mechanism and the tokens are metered against the plan.
+
+So every cache hit recorded here is **implicit prefix matching**, done by the
+provider with no marker in the request: XKIRO 37.0M cached tokens, Google
+Gemini 5.6M, NVIDIA 4.0M, Ollama 1.25M. The vendored runtime's only
+`cache_control` handling copies the field on web-search tool definitions, and
+nothing in core sets it; core reads cache token counts for accounting and
+nothing more.
+
+Why no marker is sent is unresolved. The client carries a global cache strategy
+and an error classifier for `cache_control_field`, `unknown field` and
+`cannot be set`, which is the shape of a client that disables the feature when
+a provider rejects it, but no response in the window mentions `cache_control`
+and no 4xx names an unknown field, so that mechanism is not evidenced here. The
+decisive measurement is what the client sends inbound to 3456, which the
+request log cannot show because it stores the upstream body.
+
+### What already holds
+
+Implicit caching needs a byte-stable prefix, so anything injected ahead of it
+matters. `gateway-claude-code-oauth-identity.mjs` prepends a constant with no
+timestamp, counter or session id, and declines when the block already leads, so
+it is idempotent and cache-safe. That was worth checking rather than assuming:
+a varying injected block would have cost every cache hit on every request.
+
+Chain ordering was checked against the cache column across all four rules. The
+heads are `Google Gemini` at 66 per cent, `Codex API` at 92 per cent and
+`OpenCode Go Responses` at 89 per cent, so the chains already lead with
+caching providers and no reordering is called for.
+
+### The lever that is still unpulled
+
+Where a target speaks `anthropic_messages`, a provider hook could mark the
+invariant prefix with `cache_control` rather than relying on the provider to
+match it implicitly. The hook layer is the only one that sees a built upstream
+body, and `gateway-claude-code-oauth-identity.mjs` already proves a hook can
+reshape the `system` array on that path and have the provider accept it.
+
+Two things have to be established before building it, and neither is expensive.
+Whether the client already sends the marker and something drops it, which a
+local sink on a provider's base URL answers in one request. And whether the
+gain is real, which the `cache_read_tokens` column reports directly once a
+marker is present. Marking a prefix that the provider was already matching
+implicitly buys nothing, so the measurement decides whether the feature exists
+at all.
+
+### What cannot be fixed here
+
+The 84KB of `$defaults` is the bulk of the invariant prefix and belongs to the
+client. Caching reduces what re-reading it costs; nothing available here
+reduces what is sent.
