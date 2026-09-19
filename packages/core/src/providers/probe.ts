@@ -1861,7 +1861,20 @@ function isProtocolSupported(
     if (/not found|unknown endpoint|unknown route|no route/.test(normalized)) {
       return false;
     }
-    if (/no available model provider|not supported|unsupported|no provider/.test(normalized)) {
+    // "unsupported" and "not supported" are also the commonest words in
+    // ordinary parameter validation ("Unsupported parameter: 'temperature'",
+    // "stream is not supported for this model"), so on their own they are not
+    // evidence about the route. Matching them bare cost the capability for a
+    // provider that serves the protocol and rejected one field of the probe
+    // body, and the router then addressed it with a different protocol, which
+    // surfaces as that provider's own 4xx and reads as a credential fault.
+    // They count only when they name the route rather than a field of the
+    // request.
+    const routeNounNearby = "(endpoint|route|protocol|api|method|operation|path)";
+    const saysTheRouteIsNotServed = /no available model provider|no provider/.test(normalized)
+      || new RegExp(`${routeNounNearby}[^.]{0,24}(not supported|unsupported)`).test(normalized)
+      || new RegExp(`(not supported|unsupported)[^.]{0,24}${routeNounNearby}`).test(normalized);
+    if (saysTheRouteIsNotServed) {
       return false;
     }
     return true;

@@ -1084,6 +1084,44 @@ test("a 400 that says the provider cannot route the model does not mark the prot
   );
 });
 
+test("a 400 rejecting a parameter still marks the protocol supported", () => {
+  // "unsupported" and "not supported" are the commonest words in parameter
+  // validation. Matching them bare dropped the capability for a provider that
+  // serves the route, and the router then addressed it with a different
+  // protocol, which surfaces as the provider's own 4xx and reads as a
+  // credential fault.
+  for (const message of [
+    "Unsupported parameter: 'max_completion_tokens' is not supported with this model",
+    "unsupported_value: 'temperature' does not support 0.5 with this model",
+    "stream is not supported for this model",
+    "Unsupported field: tools"
+  ]) {
+    assert.equal(
+      isProviderProtocolEndpointSupportedForProbe(400, message, "openai_chat_completions", []),
+      true,
+      message
+    );
+  }
+});
+
+test("a 400 naming the route as unsupported does not mark the protocol supported", () => {
+  // The other half: when the words describe the route rather than a field,
+  // recording the capability sends every routed request to an endpoint that
+  // always fails.
+  for (const message of [
+    "This endpoint is not supported",
+    "unsupported api version for this route",
+    "The requested protocol is not supported by this provider",
+    "There is no available model provider that meets your routing requirements"
+  ]) {
+    assert.equal(
+      isProviderProtocolEndpointSupportedForProbe(400, message, "anthropic_messages", []),
+      false,
+      message
+    );
+  }
+});
+
 test("an ordinary 400 still marks the protocol supported", () => {
   // The control for the rule above: a route that exists and rejects the probe
   // body is exactly what a 400 normally means, and must keep counting as
