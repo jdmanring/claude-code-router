@@ -96,24 +96,38 @@ already failed.
 Staged for upstream as `fix/claude-code-oauth-identity-system-block`, three
 files off `origin/main`.
 
-**Codex API answered 401 with a freshly refreshed token.** Its stored access
-token is a snapshot from import time, the vendored runtime's
-`refreshIfMissingAccessToken` fires only when the token is absent, and nothing
-re-reads `auth.json`. After the on-disk token was refreshed the stored copy
-still did not match it, and the provider stayed 401 until the provider was
-re-imported.
+**Codex API answered 401 with a freshly refreshed token.** The first reading of
+this was wrong and is corrected here. The vendored runtime does refresh an
+expired access token, and `withCodexOauthRuntimeDefaults` already substitutes
+the current tokens from `~/.codex/auth.json` every time the gateway config is
+compiled. The actual cause is that the Codex CLI rotates the **refresh** token
+too: the stored refresh token no longer matched the on-disk one, so the running
+gateway held a token it could not exchange and fell back to an expired access
+token. Re-importing the provider recompiled the config and the provider moved
+from 401 to 429.
 
-Staged for upstream as `fix/codex-oauth-stale-access-token`, two files off
-`origin/main`.
+A patch was staged for this and then withdrawn, because it did not fix the
+cause: omitting the stored access token is inert wherever the login file exists,
+since the compiler overwrites it anyway, and removes the only credential
+available where it does not. The remaining real gap is narrow, that a rotation
+during a run is not picked up until the gateway recompiles, and it is recorded
+rather than patched.
 
-After re-import, Codex answers 429 rather than 401, and the usage endpoint
-called with the current token confirms the quota is genuinely spent: primary
-100% used, 0 remaining, resets 2026-10-13, no manual resets available. That one
-is real and waits for the reset.
+Verified with the current token: primary quota 100% used, 0 remaining, resets
+2026-10-13, no manual resets available. The quota is genuinely spent.
 
-Both branches are based directly on `origin/main` and carry only their own fix,
-unlike the older `fix/*` branches here, which were cut from the fork and carry
-its whole history.
+`fix/claude-code-oauth-identity-system-block` is based directly on `origin/main`
+and carries only its own fix, unlike the older `fix/*` branches here, which were
+cut from the fork and carry its whole history.
+
+The identity match in that branch is **exact**, not a prefix. Measured with one
+token seconds apart: no system block, an unrelated first block, the identity
+placed second, and the identity carrying trailing text are each refused with the
+same empty 429; only an exact first block is accepted, and further blocks after
+it are free. A prefix test passes over the one shape this repository produces,
+since adapting a request for a non-Anthropic protocol flattens the CLI's two
+blocks into a single string beginning with the identity. Verified end to end:
+that flattened shape now answers 200 on the first attempt.
 
 
 ## Retry-aware reading, 2026-09-19

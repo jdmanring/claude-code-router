@@ -310,26 +310,36 @@ leaves a request that already identifies itself untouched. Before reading a 429
 from this provider as a quota, read `getProviderAccountSnapshots`, which calls
 the usage endpoint and reports the real figure.
 
-Both providers store a **snapshot** of the token in `providerPlugins`, taken when
-the provider was imported, but only one of them is stuck with it. Claude Code,
-Grok and Kimi are handled by `local-agent-auth-provider-hook.ts`, which re-reads
-the agent's credential file on every request and falls back to the snapshot, so a
-rotation is picked up without a restart. Codex is not handled there at all: the
-vendored runtime consumes its `codexOauth` entry, and
-`refreshIfMissingAccessToken` fires only when the access token is absent, so an
-expired snapshot is kept and sent indefinitely. The symptom is a 401 from a
-provider whose CLI beside it is working from a token refreshed hours earlier.
+Both providers store a token snapshot in `providerPlugins`, and neither is stuck
+with it, for different reasons. Claude Code, Grok and Kimi are handled by
+`local-agent-auth-provider-hook.ts`, which re-reads the agent's credential file
+on every request and falls back to the snapshot. Codex is not handled there:
+`withCodexOauthRuntimeDefaults` in the config compiler substitutes the current
+`accessToken`, `refreshToken` and `accountId` from `~/.codex/auth.json` over
+whatever the plugin stored, every time the gateway configuration is compiled,
+and the vendored runtime then refreshes on its own when the access token parses
+as expired or an upstream 401 comes back.
 
-`codexOauthCredential` now omits the access token whenever a refresh token
-exists, which is what makes that refresh fire. Re-import through
-`importLocalAgentProvider` is the supported way to refresh an existing entry;
-editing the stored credential by hand is not, and the sandbox refuses it.
+What neither does is notice a rotation **while the gateway is running**. The
+Codex CLI rotates the refresh token as well as the access token, so once it has
+refreshed, the running gateway holds a refresh token that can no longer be
+exchanged, and it falls back to an access token that has expired. The symptom is
+401 from a provider whose CLI beside it works. A gateway restart or any real
+config change recompiles and fixes it; `importLocalAgentProvider` does the same
+for the stored copy. Editing the credential by hand is not the supported path
+and the sandbox refuses it.
+
+Read a 429 from `Codex API` with `getProviderAccountSnapshots` before calling it
+a credential fault, and a 401 as the rotation above rather than a signed-out
+account.
 
 `local-plugins/gateway-claude-code-oauth-identity.mjs` predates the core fix and
 does the same thing from the plugin host, which needs no rebuild. Both are
-idempotent and skip a request that already carries the block. DEFER(once the
-installed dist is rebuilt from this tree): drop the local plugin and let
-`withClaudeCodeIdentity` carry it alone.
+idempotent. Note that the plugin host loads plugin modules when the gateway
+child starts, so editing the file changes nothing until the child restarts, and
+a `saveConfig` whose content is unchanged does not restart it: use
+`restartGateway`. DEFER(once the installed dist is rebuilt from this tree):
+drop the local plugin and let `withClaudeCodeIdentity` carry it alone.
 
 ## Usage tracking
 

@@ -101,7 +101,7 @@ export function createGatewayPlugin() {
           }
           if (!usesClaudeCodeOauth(upstream)) return { ok: true, value: upstream };
           const { applied, upstreamRequest } = withIdentity(upstream);
-          if (applied) console.log("[claude-code-oauth-identity] added the Claude Code system block");
+          if (applied) console.log("[claude-code-oauth-identity] led the request with the Claude Code system block");
           return { ok: true, value: upstreamRequest };
         }
       }
