@@ -219,7 +219,7 @@ and therefore of cost:
 The practical consequence is that **`haiku` subagents are close to free and can
 be run many at a time**, which makes fan-out retrieval the cheapest way to
 answer a question that spans many files. `fable` is the scarce one and is worth
-spending on judgement rather than retrieval. `.claude/agents/scout.md` and
+spending on judgment rather than retrieval. `.claude/agents/scout.md` and
 `.claude/agents/architect.md` are the two ends of that.
 
 Two cautions. Small free models do not fail loudly: a scout-style agent must be
@@ -248,7 +248,7 @@ prefix of some slot value and treating a rule that prefixes none as dead.
 ## Instruments in this repository
 
 Four scripts and the plugin tests. Each answers one question, each runs against
-the live install, and each has its pure judgement pinned by tests run with
+the live install, and each has its pure judgment pinned by tests run with
 `node --test <file>` rather than the workspace harness.
 
 Counts drift as tests are added, so re-measure rather than trusting the
