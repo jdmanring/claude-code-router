@@ -114,3 +114,32 @@ is real and waits for the reset.
 Both branches are based directly on `origin/main` and carry only their own fix,
 unlike the older `fix/*` branches here, which were cut from the fork and carry
 its whole history.
+
+
+## Retry-aware reading, 2026-09-19
+
+`node scripts/provider-sweep.mjs` over all 56 providers, retrying only the
+statuses that carry no verdict: **44 reachable**.
+
+Bazaarlink and Z.ai answered only on a later pass, having failed the first. A
+single-pass sweep would have counted both as dead, which is what the earlier
+numbers in this file did.
+
+The twelve still unreachable, each terminal on its own first reading except
+where noted:
+
+| Provider | Reading |
+|---|---|
+| Vercel | monthly $5 credit spent, refills |
+| Electronhub | weekly credit spent: "Insufficient Neutrinos", cost 1 to 5 per request against a balance of 0, refills |
+| Zen | free tier refuses any client that is not OpenCode; the key itself is valid |
+| Tokenrouter, VSLLM | new-api relays reporting a literal zero allowance on their own free models |
+| OVH | shared anonymous rate limit, by design |
+| Orcarouter | free models need an established linked GitHub account |
+| Meta | payment method on file, not a charge |
+| Venice | accessPermitted false, all balances zero |
+| v0 | no OpenAI-compatible surface for this key |
+| Codex API | 429 surviving four passes; quota genuinely spent, resets 2026-10-13 |
+| Tokenreply | 502 surviving four passes; provider-side outage |
+
+Claude Code API is reachable again and no longer appears here.
