@@ -326,6 +326,9 @@ export class GatewayRequestPipeline {
           ),
           providerProtocol: resolveResponseProviderProtocol(responseHeaders, this.config),
           requestedModel,
+          // Assigned when the route is decided, which happens before this
+          // closure runs on response finish.
+          ...(routedSessionId ? { sessionId: routedSessionId } : {}),
           requestBody: shouldSendBody(method) ? bodyToForward ?? Buffer.alloc(0) : Buffer.alloc(0),
           requestHeaders: headers,
           requestId,

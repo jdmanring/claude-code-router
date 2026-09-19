@@ -118,6 +118,7 @@ export type RequestLogRecordInput = {
   bodyCapturePolicy?: "all" | "errors" | "none";
   captureBody?: boolean;
   client?: string;
+  sessionId?: string;
   completedAt?: string;
   durationMs: number;
   error?: string;
@@ -684,6 +685,7 @@ export class RequestLogStore {
         request_id,
         event_id,
         client,
+        session_id,
         method,
         path,
         url,
@@ -727,7 +729,7 @@ export class RequestLogStore {
         response_body_ref,
         stream_metrics_json,
         error
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     let inserted = false;
@@ -738,6 +740,7 @@ export class RequestLogStore {
         input.requestId ?? "",
         input.eventId ?? "",
         normalizeLabel(input.client, "unknown"),
+        input.sessionId ?? "",
         input.method,
         input.path,
         input.url,
@@ -4467,6 +4470,11 @@ function ensureRequestLogSchema(database: SqlDatabase): void {
   addColumn("request_id", "TEXT NOT NULL DEFAULT ''");
   addColumn("event_id", "TEXT NOT NULL DEFAULT ''");
   addColumn("client", "TEXT NOT NULL DEFAULT 'unknown'");
+  // The session id is computed on every routed request and was previously
+  // discarded. Without it a request cannot be attributed to the conversation
+  // that produced it, so per-session cost and per-session behaviour are
+  // unanswerable from stored data.
+  addColumn("session_id", "TEXT NOT NULL DEFAULT ''");
   addColumn("method", "TEXT NOT NULL DEFAULT ''");
   addColumn("path", "TEXT NOT NULL DEFAULT ''");
   addColumn("url", "TEXT NOT NULL DEFAULT ''");
