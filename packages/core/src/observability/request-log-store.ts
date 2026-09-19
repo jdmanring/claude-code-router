@@ -1527,7 +1527,7 @@ export class RequestLogStore {
     }
     pruneRawTraceEvents(database, now.getTime());
 
-    const cutoff = floorDay(now).toISOString();
+    const cutoff = requestLogRetentionCutoff(now, requestLogRetentionDays()).toISOString();
     const staleCount = firstNumber(
       queryRows(
         database,
@@ -4171,6 +4171,36 @@ function floorHour(date: Date): Date {
   const result = new Date(date);
   result.setMinutes(0, 0, 0);
   return result;
+}
+
+/**
+ * How many days of request logs to keep, counting today.
+ *
+ * One day, the previous behaviour, deletes everything older than local
+ * midnight on the first write after it, so yesterday cannot be examined at all
+ * and per-attempt history exists nowhere. Seven is the default because a week
+ * covers "what changed since it last worked" while staying bounded: measured
+ * on this install, a mean day is 817 requests and the busiest was 3,862, at
+ * roughly 13KB of live data per request, so a typical week is about 75MB and a
+ * pathological one about 350MB. Page reclaim already handles the freelist that
+ * leaves behind.
+ *
+ * `CCR_REQUEST_LOG_RETENTION_DAYS` overrides it. A value below one is refused
+ * rather than clamped, because zero would read as "keep nothing" and silently
+ * delete rows the caller is still writing.
+ */
+export function requestLogRetentionDays(raw: string | undefined = process.env.CCR_REQUEST_LOG_RETENTION_DAYS): number {
+  if (raw === undefined || raw.trim() === "") return 7;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return 7;
+  return Math.floor(parsed);
+}
+
+/** Local midnight `days - 1` days before `now`, so `days === 1` means today. */
+export function requestLogRetentionCutoff(now: Date, days: number): Date {
+  const cutoff = floorDay(now);
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  return cutoff;
 }
 
 function floorDay(date: Date): Date {
