@@ -508,6 +508,20 @@ config against a saved baseline, naming the exact value that moved. Take the
 baseline with `--save` once the config is known good. Credentials are reduced to
 their length, so the baseline holds no secret.
 
+## The target cooldown never sees a provider's Retry-After
+
+`cooldownAfterStatus` and `retryDelayAfterStatus` read `retry-after` from the
+response the executor holds, and that response is the gateway child's. Measured
+2026-09-19 against a local sink answering `429` with `Retry-After: 120`: the
+cooldown in force was 59,021 ms, one second from the 60,000 ms default and
+sixty-one from the 120,000 ms asked for, and the target was attempted again at
+t+73s. The header does not survive the hop, so the cooldown is its default for
+every provider.
+
+Do not read `retryDelayMs` in the route trace as evidence either way: this fork
+zeroes it deliberately when falling back to a different provider, so it is 0 on
+a 429 whether or not a header was present. Only the cooldown isolates it.
+
 ## Chain attempt numbering
 
 Two different counts describe a fallback chain and they are not interchangeable:

@@ -751,34 +751,47 @@ awesome-free-byok-models verifier. One counter-example is not enough to start
 reading bodies for it; if a second provider produces a terminal 5xx, that is
 the point to revisit.
 
-## A shipped fix that may be inert for the same reason
+## A shipped fix IS half-blind: measured, not inferred
 
 `oakimov/claude-code-router` carries `fix: propagate Retry-After headers from
-provider errors`. Reading our side against it turned up a question about work
-already merged here.
+provider errors`. Checking our side against it raised a question about work
+already merged here, and the local-sink measurement has now answered it.
 
-`retry-policy.ts` reads `headers.get("retry-after")` in two places:
-`retryDelayAfterStatus`, which sets the backoff before the next chain attempt,
-and `cooldownAfterStatus`, which decides how long a target is held down. Both
-are handed `response.headers` from `upstream/executor.ts`. But that response is
-the **gateway child's**, and the child answers with its own header set: a
-request through CCR returns `x-gateway-billing-*`, `x-gateway-target-provider`
-and `x-ccr-*`, and nothing of the provider's. `retry-after` is never among
-them, and the only place this repository sets that header is a test helper.
+`retry-policy.ts` reads `headers.get("retry-after")` in `retryDelayAfterStatus`
+(the backoff before the next chain attempt) and in `cooldownAfterStatus` (how
+long a target is held down). Serena gives `cooldownAfterStatus` exactly one
+caller, `fetchUpstreamWithFallback` in `upstream/executor.ts`, and the response
+it is handed is the gateway child's.
 
-If the child does not forward a provider's `Retry-After` on an error, then both
-functions always fall through to their defaults, and the cooldown work merged
-here is using 60 seconds every time rather than the interval the provider
-asked for.
+**The measurement.** A local sink on 127.0.0.1:9797 answered every request
+`429` with `Retry-After: 120`, `x-sink-marker: present` and
+`x-ratelimit-remaining-requests: 0`. A throwaway provider pointed at it, one
+request sent through CCR, then the cooldown store read back through the route
+trace:
 
-**Not established**, and the honest reason is that it needs a provider that
-reliably answers 429 *with* a `Retry-After` header while the chain is watched.
-Codex API, the obvious candidate, answered 200 through a fallback on this
-attempt. The measurement to make: point a provider's base url at a local sink
-that returns `429` with `Retry-After: 120`, send one request, and read whether
-`cooldownAfterStatus` receives 120000 or the 60000 default. That is the same
-local-sink technique the repository guide already describes for deciding which
-process opens the upstream connection.
+- Neither `retry-after` nor `x-sink-marker` reached the client.
+- The 429 was recorded at 09:19:38.239Z. A request 32,772 ms later was answered
+  `upstream.attempt.skipped` with `cooldownRemainingMs: 26249`, so the cooldown
+  in force was **59,021 ms**: one second from the 60,000 ms default and
+  sixty-one seconds from the 120,000 ms the provider asked for.
+- A third request at t+73s found the target **attempted again**, which a
+  120-second cooldown would have prevented.
 
-Until then the cooldown is correct in its logic and possibly blind in its
-input, which is worth knowing before anyone tunes it.
+So `cooldownAfterStatus` never sees a provider's `Retry-After`, and the target
+cooldown merged in this fork uses its default every time. It is correct in its
+logic and blind in its input, for the same root cause as the usage headers: the
+vendored child answers with its own `x-gateway-*` set and forwards none of the
+provider's.
+
+**One reading that nearly went in as evidence and should not have.** The
+trace's `retryDelayMs` was 0 on that 429, which looks like the header being
+ignored. It is not evidence: this fork's own
+`fix/fallback-delay-between-providers` deliberately zeroes the delay when
+falling back to a *different* provider. Only the cooldown isolates the header
+question, which is why the measurement had to wait past 60 seconds.
+
+**What can be done.** Nothing in this repository: the header is gone before any
+code here runs. The fix belongs in the vendored runtime, next to the response
+headers it already replaces. Until then, treat `defaultTargetCooldownMs` as the
+real cooldown for every provider and do not tune it expecting `Retry-After` to
+override it.
