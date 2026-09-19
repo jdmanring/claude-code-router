@@ -599,7 +599,30 @@ build immediately, while the equivalent core change waits for a reinstall.
 
 ## Test baseline
 
-`origin/main` does not pass its own core suite. Before attributing a core test failure to local work, reproduce it against pure upstream in a throwaway worktree (`git worktree add --detach <dir> origin/main`, symlink the root `node_modules`, then `node build/test.mjs core && node build/run-tests.mjs core`) and compare failure names. Attribute only the difference.
+`origin/main` does not pass its own core suite. Before attributing a core test
+failure to local work, reproduce it against pure upstream in a throwaway
+worktree (`git worktree add --detach <dir> origin/main`, symlink the root
+`node_modules`, then `node build/test.mjs core && node build/run-tests.mjs
+core`) and compare failure names. Attribute only the difference.
+
+Measured 2026-09-19 at `origin/main` `a034b0c5`, with this fork 133 commits
+ahead:
+
+| | upstream | this fork |
+| --- | --- | --- |
+| pass | 996 | 1064 |
+| fail | 5 | 2 |
+
+Upstream's five: the Kimi CLI profile home, the provider model catalogue preset
+aliases, and three Claude Design and bundled-plugin permission tests. This
+fork's two are the **first two of those and nothing else**, so the fork's
+failures are a strict subset of upstream's and the three plugin tests pass here
+that do not pass there. Both remaining failures byte-compare against generated
+`models.json` content, which rule 4 treats as evidence about the environment
+until proven otherwise.
+
+Re-measure this table rather than trusting it: it is a statement about two
+moving trees.
 
 ## Generated files
 
