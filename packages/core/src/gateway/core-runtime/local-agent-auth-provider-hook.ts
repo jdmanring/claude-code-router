@@ -2,7 +2,7 @@ import { readClaudeCodeOauth, readGrokAuth, readKimiAuth, resolveGrokAuth, resol
 import { grokAccessTokenExpired, grokClientVersion } from "@ccr/core/agents/local-providers/grok";
 import { kimiAccessTokenExpired, kimiIdentityHeaders } from "@ccr/core/agents/local-providers/kimi";
 import { transformCodexApplyPatchBridgeRequestBody } from "@ccr/core/gateway/features/codex-patch-bridge";
-import { claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta } from "@ccr/core/gateway/internal/shared";
+import { claudeCodeIdentitySystemPrompt, claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta } from "@ccr/core/gateway/internal/shared";
 import { isRecord, stringValue } from "@ccr/core/gateway/internal/value";
 import { mergeAnthropicBetaValues } from "@ccr/core/providers/oauth-plugin";
 
@@ -147,13 +147,64 @@ async function authenticateClaudeCode(
     originalAnthropicBetaDefault(plugin),
     claudeCodeOauthRequiredBeta
   );
+  const body = withClaudeCodeIdentity(input.upstreamRequest.body);
   return {
     ok: true,
     value: {
       ...input.upstreamRequest,
+      body: body.changed ? body.value : input.upstreamRequest.body,
       headers
     }
   };
+}
+
+// Anthropic refuses a token carrying the Claude Code session scope unless the
+// FIRST system block is exactly the Claude Code identity line, and the refusal is
+// `429 rate_limit_error` with an empty message. Read as a quota it takes a
+// working subscription out of every chain naming it, while the usage endpoint
+// reports each limit well inside its allowance.
+//
+// Measured against the API, same token, seconds apart: no system block 429, an
+// unrelated first block 429, the identity second 429, and the identity carrying
+// any trailing text 429. Only an exact first block answers 200, and further
+// blocks after it are free, which is the shape the interactive CLI sends.
+//
+// Equality therefore has to be exact. A prefix test would pass over the one
+// shape this repository actually produces, because adapting a request for a
+// non-Anthropic protocol flattens the CLI's two blocks into a single string
+// that begins with the identity and continues into the rest of the prompt.
+//
+// A top-level Claude Code turn is already correct and is returned untouched.
+// A subagent with its own system prompt, another agent falling back down a
+// chain, and any internal call are not, and those reach this provider last, so
+// the failure arrives when there is nothing left to fall back to.
+export function withClaudeCodeIdentity(value: unknown): { value: unknown; changed: boolean } {
+  if (!isRecord(value) || !Array.isArray(value.messages)) {
+    return { value, changed: false };
+  }
+  const system = value.system;
+  if (claudeCodeIdentityLeads(system)) {
+    return { value, changed: false };
+  }
+  const identity = { text: claudeCodeIdentitySystemPrompt, type: "text" };
+  if (system === undefined || system === null || system === "") {
+    return { value: { ...value, system: [identity] }, changed: true };
+  }
+  const rest = typeof system === "string"
+    ? [{ text: system, type: "text" }]
+    : Array.isArray(system) ? system : undefined;
+  if (!rest) {
+    return { value, changed: false };
+  }
+  return { value: { ...value, system: [identity, ...rest] }, changed: true };
+}
+
+function claudeCodeIdentityLeads(system: unknown): boolean {
+  const first = Array.isArray(system) ? system[0] : system;
+  if (typeof first === "string") {
+    return first === claudeCodeIdentitySystemPrompt;
+  }
+  return isRecord(first) && first.text === claudeCodeIdentitySystemPrompt;
 }
 
 async function resolveLiveGrokAccessToken(plugin: Record<string, unknown>): Promise<string | undefined> {

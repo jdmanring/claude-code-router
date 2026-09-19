@@ -7,8 +7,10 @@ import { createDefaultAppConfig } from "@ccr/core/config/default-config.ts";
 import { compileCoreGatewayConfig } from "@ccr/core/gateway/core-runtime/config-compiler.ts";
 import {
   createGatewayPlugin,
-  isLocalAgentOauthProviderPlugin
+  isLocalAgentOauthProviderPlugin,
+  withClaudeCodeIdentity
 } from "@ccr/core/gateway/core-runtime/local-agent-auth-provider-hook.ts";
+import { claudeCodeIdentitySystemPrompt } from "@ccr/core/gateway/internal/shared.ts";
 import { virtualApplyPatchToolName } from "@ccr/core/gateway/internal/shared.ts";
 
 test("Grok local agent auth hook refreshes live login state before authenticating upstream requests", async (t) => {
@@ -386,3 +388,91 @@ function writeGrokAuth(grokHome, auth) {
     "https://auth.x.ai::test-account": auth
   }, null, 2));
 }
+
+test("Claude Code identity block is added only where Anthropic requires it", () => {
+  const messages = [{ content: "hi", role: "user" }];
+  const first = (body) => (typeof body.system[0] === "string" ? body.system[0] : body.system[0].text);
+
+  const added = withClaudeCodeIdentity({ messages });
+  assert.equal(added.changed, true);
+  assert.equal(first(added.value), claudeCodeIdentitySystemPrompt);
+
+  const fromString = withClaudeCodeIdentity({ messages, system: "be terse" });
+  assert.equal(fromString.changed, true);
+  assert.equal(fromString.value.system.length, 2);
+  assert.equal(first(fromString.value), claudeCodeIdentitySystemPrompt);
+  assert.equal(fromString.value.system[1].text, "be terse");
+
+  const existing = [{ text: "a", type: "text" }, { text: "b", type: "text" }];
+  const prepended = withClaudeCodeIdentity({ messages, system: existing });
+  assert.equal(prepended.changed, true);
+  assert.deepEqual(prepended.value.system.slice(1), existing);
+  assert.equal(existing.length, 2, "the caller's system array is not mutated");
+
+  // The API accepts the identity only as an exact first block, so a block that
+  // merely begins with it still has to be led. Adapting a request for a
+  // non-Anthropic protocol produces exactly that shape, by flattening the
+  // interactive CLI's two blocks into one string.
+  const flattened = `${claudeCodeIdentitySystemPrompt}\nYou are an interactive agent that helps.`;
+  for (const system of [flattened, [{ text: flattened, type: "text" }]]) {
+    const led = withClaudeCodeIdentity({ messages, system });
+    assert.equal(led.changed, true, "a block that only starts with the identity is refused by the API");
+    assert.equal(first(led.value), claudeCodeIdentitySystemPrompt);
+    assert.equal(led.value.system.length, 2);
+  }
+
+  // The identity present but not first is refused too, so it has to be led.
+  const notFirst = [{ text: "other", type: "text" }, { text: claudeCodeIdentitySystemPrompt, type: "text" }];
+  assert.equal(withClaudeCodeIdentity({ messages, system: notFirst }).changed, true);
+
+  // Already exactly right, in either accepted shape, and left alone.
+  for (const system of [
+    [{ text: claudeCodeIdentitySystemPrompt, type: "text" }],
+    [{ cache_control: { type: "ephemeral" }, text: claudeCodeIdentitySystemPrompt, type: "text" }],
+    [{ text: claudeCodeIdentitySystemPrompt, type: "text" }, { text: "more", type: "text" }],
+    [claudeCodeIdentitySystemPrompt],
+    claudeCodeIdentitySystemPrompt
+  ]) {
+    assert.equal(withClaudeCodeIdentity({ messages, system }).changed, false);
+  }
+
+  for (const body of [undefined, null, "", { input: [] }, { messages: "not an array" }]) {
+    assert.equal(withClaudeCodeIdentity(body).changed, false);
+  }
+});
+
+test("Claude Code auth hook identifies a request that does not identify itself", { skip: process.platform === "win32" }, async () => {
+  await withClaudeCodeHome(async (home) => {
+    await withPlatform("darwin", async () => {
+      await withFakeSecurityFailure(async () => {
+        writeClaudeCredentials(home, { accessToken: "access-token", refreshToken: "refresh-token" });
+        const [hook] = createGatewayPlugin({
+          config: { providerPlugins: [claudeCodeOauthProviderPlugin()] }
+        }).providerHooks;
+
+        const base = {
+          headers: { "content-type": "application/json" },
+          method: "POST",
+          url: "https://api.anthropic.com/v1/messages"
+        };
+
+        const bare = await hook.authenticate({
+          upstreamRequest: { ...base, body: { max_tokens: 16, messages: [{ content: "hi", role: "user" }] } }
+        });
+        assert.equal(bare.ok, true);
+        assert.equal(bare.value.body.system[0].text, claudeCodeIdentitySystemPrompt);
+
+        // A real Claude Code turn already carries the block and must pass through
+        // byte for byte, so the conversation it describes is not altered.
+        const identified = {
+          max_tokens: 16,
+          messages: [{ content: "hi", role: "user" }],
+          system: [{ text: claudeCodeIdentitySystemPrompt, type: "text" }, { text: "More.", type: "text" }]
+        };
+        const untouched = await hook.authenticate({ upstreamRequest: { ...base, body: identified } });
+        assert.equal(untouched.ok, true);
+        assert.equal(untouched.value.body, identified);
+      });
+    });
+  });
+});

@@ -241,6 +241,10 @@ export const claudeCodeOauthBetaHeader = "anthropic-beta";
 
 export const claudeCodeOauthRequiredBeta = "oauth-2025-04-20";
 
+// The first system block Anthropic expects on a request authorised by a Claude
+// Code OAuth token. Without it the API answers 429 rather than naming the cause.
+export const claudeCodeIdentitySystemPrompt = "You are Claude Code, Anthropic's official CLI for Claude.";
+
 export const coreGatewayAuthHeader = "x-ccr-core-auth";
 
 export const coreGatewayAuthTokenEnv = "CCR_CORE_GATEWAY_AUTH_TOKEN";
