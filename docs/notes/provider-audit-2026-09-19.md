@@ -417,3 +417,43 @@ to change it is a change in the vendored runtime.
 `local-plugins/gateway-upstream-usage-headers.mjs` is left present and disabled
 as the probe that re-tests this after a runtime upgrade: a line below its
 registration line means the path has opened.
+
+## Untracked tier: the balance endpoints are real, behind a second credential
+
+Three findings from reading documentation rather than probing.
+
+**Requesty.** `GET https://api-v2.requesty.ai/v1/manage/org` returns the
+organization's name and current balance, bearer authenticated. The configured
+inference key is refused with `403 "API key does not have manage permissions"`,
+so this needs a manage-scoped key from their console.
+
+**Naga.** `GET https://api.naga.ac/v1/account/balance` returns
+`{"balance": "42.50"}`, a USD amount as a string, and
+`/v1/account/activity?days=N` returns requests, token usage, costs, top models
+and per-key activity. Both require a **provisioning key**; the inference key is
+refused with `401 invalid_provisioning_key`.
+
+**Routeway.** `GET /v1/account/keys` and `/v1/account/keys/{id}` carry
+`balance`, `daily_limit`, `usage_today` and `usage_minute`. They require a
+**management key** created from Dashboard -> Management Keys, and the full value
+is shown only once at creation. The inference key is refused with
+`401 "Invalid account key"`.
+
+Each is a console action of about a minute that turns on real tracking. None
+can be reached with what is configured now.
+
+**Fastrouter**, by contrast, publishes no balance endpoint, and its free tier
+has a rule worth recording: free models are 10 requests per organization per
+day per model, reset at UTC midnight, and an organization with a paid credit
+balance of $1 or less **cannot use free models at all**. Same shape as the
+AIHubMix and Orcarouter gates: the deposit is verification, not payment for the
+inference.
+
+### The relay-console pattern is exhausted
+
+Every untracked provider's host was asked for `/api/status`, unauthenticated,
+one request each. **None of the 38 runs the new-api relay software**: 26
+answered 404, four 403, two 405, one HTML, one 401. All four new-api providers
+here (Tokenrouter, VSLLM, Tokenreply, AIHubMix) are already tracked. So there
+is no second wave of relay endpoints to find by that route, and what remains is
+per-provider documentation.
