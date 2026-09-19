@@ -32,11 +32,15 @@ const config = JSON.parse(new DatabaseSync(configPath, { readOnly: true })
 
 // Providers name their catalogue differently; these are the two shapes seen
 // across this install. Anything else reads as unknown.
-export function catalogueIds(payload) {
-  const rows = Array.isArray(payload?.data) ? payload.data
+function catalogueArray(payload) {
+  return Array.isArray(payload?.data) ? payload.data
     : Array.isArray(payload?.models) ? payload.models
     : Array.isArray(payload) ? payload
     : undefined;
+}
+
+export function catalogueIds(payload) {
+  const rows = catalogueArray(payload);
   if (!rows) return undefined;
   const ids = rows
     .map((row) => (typeof row === "string" ? row : row?.id ?? row?.name ?? row?.model))
@@ -49,10 +53,7 @@ export function catalogueIds(payload) {
  * survives. `catalogueIds` reduces them to strings and loses it.
  */
 export function catalogueRows(payload) {
-  const rows = Array.isArray(payload?.data) ? payload.data
-    : Array.isArray(payload?.models) ? payload.models
-    : Array.isArray(payload) ? payload
-    : undefined;
+  const rows = catalogueArray(payload);
   return Array.isArray(rows) ? rows.filter((row) => row && typeof row === "object") : undefined;
 }
 
@@ -89,14 +90,13 @@ export function chatCapability(row) {
 // The gateway drops a leading segment that repeats the protocol family, and
 // some providers list an id the configured form abbreviates. Compare on the
 // last segment too rather than reporting a naming difference as a withdrawal.
-export function publishedTails(published) {
+function publishedTails(published) {
   return new Set([...published].map((id) => id.split("/").pop()));
 }
 
 export function isPublished(configured, published, tails = publishedTails(published)) {
   if (published.has(configured)) return true;
-  const tail = configured.split("/").pop();
-  return published.has(tail) || tails.has(tail);
+  return tails.has(configured.split("/").pop());
 }
 
 async function catalogue(provider) {

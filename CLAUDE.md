@@ -264,7 +264,7 @@ column: `for f in scripts/*.test.mjs local-plugins/*.test.mjs; do node --test "$
 | Does every fallback chain entry name a configured provider and model | the same, reported on every run | |
 | Which candidate model belongs in a slot | `scripts/model-probe.mjs` | 8 |
 | How much of each provider's allowance is left | `scripts/provider-allowance.mjs` | 7 |
-| What did one request actually do | `scripts/ccr-log.mjs` | none |
+| What did one request actually do | `scripts/ccr-log.mjs` | 5 |
 | Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 14 |
 
 Two properties worth keeping. **Importing any of them except `ccr-log.mjs`
@@ -349,8 +349,13 @@ readable one: OpenRouter publishes a credits meter resolving to undefined
 beside a balance holding 19.79 of 20, and ranking the unreadable one first
 reported that account as unknown.
 
-`scripts/ccr-log.mjs` has no tests. It reads and prints, and a wrong reading is
-visible immediately, so the gap is deliberate rather than overlooked.
+`scripts/ccr-log.mjs` was left untested on the reasoning that it reads and
+prints, so a wrong reading would be visible immediately. That was wrong, and
+the bug it allowed is the counterexample: `--trace <id>` ran the listing query
+first and exited 0 on an empty window, so asking for a trace outside the
+window printed "No matching requests." while the trace existed. A wrong
+reading that looks exactly like a right one is the case the reasoning missed.
+It is driven as a subprocess against a throwaway log via `CCR_LOG_DB`.
 
 ## Provider triage
 

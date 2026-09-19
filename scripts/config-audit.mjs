@@ -17,7 +17,11 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import path from "node:path";
 import { homedir } from "node:os";
 
-const configDir = process.env.CCR_INTERNAL_HOME_DIR ?? path.join(homedir(), ".claude-code-router");
+// CCR_INTERNAL_HOME_DIR names a HOME, not a config directory: core resolves
+// the config as `<home>/.claude-code-router`, and the test harness points it
+// at a throwaway home. Treating it as the config directory read the wrong
+// path under that harness, and would have written a baseline there.
+const configDir = path.join(process.env.CCR_INTERNAL_HOME_DIR ?? homedir(), ".claude-code-router");
 const configFile = process.env.CCR_CONFIG_DB ?? path.join(configDir, "config.sqlite");
 const baselineFile = process.env.CCR_CONFIG_BASELINE ?? path.join(configDir, "config-baseline.json");
 

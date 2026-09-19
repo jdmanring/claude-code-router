@@ -51,21 +51,14 @@ function attemptsOf(traceJson) {
     }));
 }
 
-const rows = db.prepare(`
-  select l.id, l.provider, l.status_code, l.ok, l.duration_ms,
-         l.response_body_text, t.trace_json
-  from request_logs l left join request_route_traces t on t.request_log_id = l.id
-  ${whereSql} order by l.id desc limit ${Number.isFinite(limit) ? limit : 50}
-`).all().reverse();
-
-if (rows.length === 0) { console.log("No matching requests."); process.exit(0); }
-
+// Answered before the listing query, and by id alone. Running the window
+// first let an empty window exit 0 with "No matching requests." while the
+// requested trace existed, which reads as an answer and is not one.
 const traceId = arg("--trace");
 if (traceId) {
-  const row = rows.find((r) => String(r.id) === String(traceId))
-    ?? db.prepare(`select l.id,l.status_code,l.duration_ms,l.response_body_text,t.trace_json
-                   from request_logs l left join request_route_traces t on t.request_log_id=l.id
-                   where l.id=?`).get(Number(traceId));
+  const row = db.prepare(`select l.id,l.status_code,l.duration_ms,l.response_body_text,t.trace_json
+                          from request_logs l left join request_route_traces t on t.request_log_id=l.id
+                          where l.id=?`).get(Number(traceId));
   if (!row) { console.error(`Request ${traceId} not found.`); process.exit(1); }
   console.log(`request ${row.id}  status ${row.status_code}  ${row.duration_ms}ms`);
   for (const [i, a] of attemptsOf(row.trace_json).entries()) {
@@ -78,6 +71,15 @@ if (traceId) {
   if (row.response_body_text) console.log(`\n  body: ${row.response_body_text.slice(0, 500)}`);
   process.exit(0);
 }
+
+const rows = db.prepare(`
+  select l.id, l.provider, l.status_code, l.ok, l.duration_ms,
+         l.response_body_text, t.trace_json
+  from request_logs l left join request_route_traces t on t.request_log_id = l.id
+  ${whereSql} order by l.id desc limit ${Number.isFinite(limit) ? limit : 50}
+`).all().reverse();
+
+if (rows.length === 0) { console.log("No matching requests."); process.exit(0); }
 
 if (has("--errors")) {
   const seen = new Map();

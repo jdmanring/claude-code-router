@@ -37,9 +37,14 @@ const home = process.env.CCR_INTERNAL_HOME_DIR ?? os.homedir();
 const configPath = path.join(home, ".claude-code-router", "config.sqlite");
 const logPath = path.join(home, ".claude-code-router", "app-data", "request-logs.sqlite");
 
-const config = JSON.parse(new DatabaseSync(configPath, { readOnly: true })
+// One handle each. A sweep reads the log once per attempt, so opening a
+// connection per read meant more than a hundred opens of the same file.
+const configDb = new DatabaseSync(configPath, { readOnly: true });
+const logDb = new DatabaseSync(logPath, { readOnly: true });
+
+const config = JSON.parse(configDb
   .prepare("select value_json from app_config where key='default'").get().value_json);
-const key = String(new DatabaseSync(configPath, { readOnly: true })
+const key = String(configDb
   .prepare("select encrypted_key from api_keys where id='local-gateway'").get().encrypted_key);
 
 const ALL_MODELS = argv.includes("--all-models");
@@ -53,8 +58,7 @@ const targets = (config.Providers ?? [])
   .filter((p) => only.length === 0 || only.includes(p.name))
   .map((p) => ({ models: ALL_MODELS ? [...p.models] : [p.models[0]], name: p.name }));
 
-const maxLogId = () => new DatabaseSync(logPath, { readOnly: true })
-  .prepare("select max(id) m from request_logs").get().m;
+const maxLogId = () => logDb.prepare("select max(id) m from request_logs").get().m;
 
 // Retryable means the reading says nothing about the provider yet. Everything
 // else is the provider's own answer and does not improve by asking again.
@@ -111,7 +115,7 @@ async function attempt(target) {
   }
   await new Promise((r) => setTimeout(r, 1200));
 
-  const row = new DatabaseSync(logPath, { readOnly: true }).prepare(
+  const row = logDb.prepare(
     `select t.trace_json from request_logs l
        left join request_route_traces t on t.request_log_id = l.id
       where l.id > ? order by l.id desc limit 1`).get(before);
