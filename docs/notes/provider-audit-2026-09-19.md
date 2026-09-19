@@ -900,3 +900,31 @@ Nothing of oakimov's code was copied. The one commit taken from any fork this
 session is Peter Steinberger's, cherry-picked with `-x` so his authorship and
 the originating commit id are in the history. Both forks are MIT, the same
 licence as upstream.
+
+## Verifying the reclaim as a change on a write path
+
+The reclaim added earlier was tested at its decision function and not at its
+action, which is the wrong half to stop at for something that runs inside
+`record` and `updateFromRawTrace`. Three things were then measured.
+
+**It is not inside a transaction, so it is not silently inert.** SQLite answers
+`cannot VACUUM from within a transaction`, and the `catch` around the reclaim
+would swallow exactly that into a no-op. Serena resolves the prune's five
+callers with their enclosing methods - `record`, `updateFromRawTrace`, `list`,
+`analyze` and `open` - and in every one the prune is called immediately after
+`getDatabase()`, before any `database.transaction(...)`. Grep could not answer
+this; it returns line numbers without the enclosing symbol.
+
+**It works in WAL with another connection open.** A 9.1 MB freelist on a WAL
+database with a second read-only connection attached reclaimed fully, threw
+nothing, and the reader kept answering afterwards.
+
+**Its cost tracks live data, not file size.** On a 196 MB database: 1 ms when
+almost all of it was freelist, 566 ms when almost all of it was live.
+
+That last number makes the ratio threshold load-bearing rather than decorative.
+The 64 MB byte floor alone would let a large, mostly-live database qualify on
+its waste and pay a multi-second write pause; requiring half the file to be
+free bounds the live set that has to be copied. The prune is gated to once a
+day, so the worst case is one bounded pause per day. The reasoning is now in
+the code beside the thresholds, where someone tempted to relax one will read it.

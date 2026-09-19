@@ -5633,8 +5633,21 @@ function normalizeBodyRef(value: string | undefined): string | undefined {
  * contents and never the file. Measured on one install: 345.6 MB on disk, of
  * which 344.5 MB was freelist and 1.1 MB was data, holding 28 rows.
  *
- * VACUUM rewrites the whole file and takes a write lock, so it is worth doing
- * only when there is a real amount to recover.
+ * VACUUM rewrites the file and takes a write lock, and this runs on the write
+ * path (`record` and `updateFromRawTrace` both call the prune first), so its
+ * cost matters. Measured 2026-09-19 on a 196 MB database: 1 ms when almost all
+ * of it was freelist, 566 ms when almost all of it was live. The cost tracks
+ * **live data**, not file size.
+ *
+ * That is why the ratio threshold is load-bearing rather than decorative. The
+ * byte threshold alone would let a large, mostly-live database qualify on its
+ * 64 MB of waste and pay a multi-second write pause for it; requiring half the
+ * file to be free bounds the live set that has to be copied. The prune runs at
+ * most once a day, so the worst case is one bounded pause in that window.
+ *
+ * It must also stay outside a transaction: SQLite answers "cannot VACUUM from
+ * within a transaction", and the catch below would swallow that into a silent
+ * no-op. All five callers invoke the prune before opening one.
  */
 export function shouldReclaimRequestLogPages(
   freePages: number,
