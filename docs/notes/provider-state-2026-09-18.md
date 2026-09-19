@@ -1,7 +1,7 @@
 # Provider state, 2026-09-18
 
 Measured by direct call to each provider, with that provider's own key and a
-model from its own catalogue. A status from the reachability sweep is not used
+model from its own catalog. A status from the reachability sweep is not used
 here, because it reads CCR's first attempt rather than the provider.
 
 Reachable through CCR: 43 of 56.
