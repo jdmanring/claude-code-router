@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, openSync, closeSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { botGatewayProfileEnv } from "@ccr/core/agents/bot-gateway/env";
 import { applyClaudeAppGatewayConfig } from "@ccr/core/agents/claude-app/gateway-service";
@@ -392,9 +392,26 @@ export function serviceLogFile(configDir = CONFIGDIR): string {
   return path.join(configDir, "ccr-service.log");
 }
 
+export function previousServiceLogFile(configDir = CONFIGDIR): string {
+  return `${serviceLogFile(configDir)}.1`;
+}
+
+/**
+ * Keeps exactly one previous run. Opening the log with "w" truncates it, which
+ * is the right shape for a file that must not grow without bound, but it
+ * destroys the record of the start that just failed, which is the one anybody
+ * would want to read. Renaming first costs one generation of disk and keeps it.
+ */
 function openServiceLogFile(): number {
   const file = serviceLogFile();
   mkdirSync(path.dirname(file), { recursive: true });
+  try {
+    if (existsSync(file)) {
+      renameSync(file, previousServiceLogFile());
+    }
+  } catch {
+    // A log that cannot be rotated is still a log worth writing.
+  }
   return openSync(file, "w");
 }
 

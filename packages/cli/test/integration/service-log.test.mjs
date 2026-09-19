@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
@@ -37,6 +37,29 @@ test("the detached service writes its output to a log instead of discarding it",
       contents.trim().length > 0,
       "the service log exists but is empty, so the child's output is still discarded"
     );
+  } finally {
+    runCli(["stop"]);
+  }
+});
+
+test("starting again keeps the previous run's log instead of overwriting it", () => {
+  // The log is opened with "w" so it cannot grow without bound. On its own that
+  // erases the start that just failed, which is the one worth reading.
+  const logFile = serviceLogPath();
+  const previous = `${logFile}.1`;
+  const marker = "[test] output from the run before this one\n";
+
+  const first = runCli(["start", "--port", PORT, "--no-gateway", "--no-open"]);
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  runCli(["stop"]);
+
+  writeFileSync(logFile, marker);
+  const second = runCli(["start", "--port", PORT, "--no-gateway", "--no-open"]);
+  try {
+    assert.equal(second.status, 0, second.stderr || second.stdout);
+    assert.ok(existsSync(previous), `no rotated log at ${previous}`);
+    assert.equal(readFileSync(previous, "utf8"), marker, "the previous run's output was not kept verbatim");
+    assert.ok(!readFileSync(logFile, "utf8").includes(marker), "the new run reused the old file instead of starting clean");
   } finally {
     runCli(["stop"]);
   }
