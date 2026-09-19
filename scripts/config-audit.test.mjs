@@ -113,3 +113,25 @@ test("a disabled provider's chain entries are reported, not silently accepted", 
   };
   assert.equal(danglingChainEntries(config).length, 1);
 });
+
+test("a slot naming a model the provider no longer carries is reported", () => {
+  // Cutting a provider's model list to one entry left the sonnet slot naming
+  // a model that no longer existed. Every request for that agent was refused
+  // before any chain was consulted, and the chain check could not see it
+  // because a slot is not a chain entry.
+  const config = {
+    Providers: [{ models: ["mimo-v2.5-free"], name: "Zen" }],
+    profile: { profiles: [{ routing: { rules: [] }, sonnetModel: "Zen/muse-spark-1.3-contributor-free" }] }
+  };
+  const found = danglingChainEntries(config);
+  assert.equal(found.length, 1);
+  assert.match(found[0].reason, /slot sonnetModel names a model/);
+});
+
+test("a slot that resolves is not reported", () => {
+  const config = {
+    Providers: [{ models: ["mimo-v2.5-free"], name: "Zen" }],
+    profile: { profiles: [{ routing: { rules: [] }, sonnetModel: "Zen/mimo-v2.5-free" }] }
+  };
+  assert.deepEqual(danglingChainEntries(config), []);
+});

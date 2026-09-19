@@ -156,6 +156,19 @@ export function danglingChainEntries(source) {
   const names = [...models.keys()].sort((a, b) => b.length - a.length);
   const dangling = [];
   for (const profile of source.profile?.profiles ?? []) {
+    // A slot value is what the agent sends, so a slot naming a model the
+    // provider no longer carries takes that agent down entirely: every
+    // request for it is refused before any chain is consulted. Checked first
+    // because it is the more damaging of the two and was the one missed.
+    for (const slot of ["model", "opusModel", "sonnetModel", "haikuModel", "fableModel", "smallFastModel"]) {
+      const value = profile[slot];
+      if (typeof value !== "string" || value === "") continue;
+      const provider = names.find((name) => value.startsWith(`${name}/`));
+      if (!provider) dangling.push({ entry: value, reason: `slot ${slot} names no configured provider`, rule: slot });
+      else if (!models.get(provider).has(value.slice(provider.length + 1))) {
+        dangling.push({ entry: value, reason: `slot ${slot} names a model the provider does not carry`, rule: slot });
+      }
+    }
     for (const rule of profile.routing?.rules ?? []) {
       for (const entry of rule.fallback?.models ?? []) {
         const text = String(entry);
