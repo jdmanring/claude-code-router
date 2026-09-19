@@ -232,6 +232,35 @@ still succeeds, straight down the short default chain. Audit them against each
 other rather than reading them, by testing every rule's `condition.right` as a
 prefix of some slot value and treating a rule that prefixes none as dead.
 
+## Instruments in this repository
+
+Four scripts and the plugin tests. Each answers one question, each runs against
+the live install, and each has its pure judgement pinned by tests run with
+`node --test <file>` rather than the workspace harness.
+
+| Question | Instrument | Tests |
+| --- | --- | --- |
+| Which providers does CCR actually reach, and why not | `scripts/provider-sweep.mjs` | 5 |
+| Which configured model ids does the provider still publish | `scripts/model-catalog-audit.mjs` | 4 |
+| Has anything in the config moved since it was known good | `scripts/config-audit.mjs` | 6 |
+| What did one request actually do | `scripts/ccr-log.mjs` | none |
+
+Two properties worth keeping. **Importing any of them must not run the job**:
+the imperative part sits behind an `import.meta.url` entrypoint check, because
+importing the sweep for one helper used to sweep 56 providers. And
+**`model-catalog-audit` spends no quota** - one `GET /models` per provider, no
+inference - so it is the one safe to run while something else is generating
+traffic.
+
+What each one's tests are actually for: `producedNoOutput` decides whether a
+200 counts as a working provider, so its tests pin the cases where it must
+*not* fire; the config audit's dangerous failure is a false "matches baseline",
+so its tests pin the fields the snapshot has to carry, including the one it
+lost once.
+
+`scripts/ccr-log.mjs` has no tests. It reads and prints, and a wrong reading is
+visible immediately, so the gap is deliberate rather than overlooked.
+
 ## Provider triage
 
 **OVH is anonymous access and takes no API key.** Its empty `api_key` is correct

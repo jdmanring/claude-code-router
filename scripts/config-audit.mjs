@@ -21,24 +21,25 @@ const configDir = process.env.CCR_INTERNAL_HOME_DIR ?? path.join(homedir(), ".cl
 const configFile = process.env.CCR_CONFIG_DB ?? path.join(configDir, "config.sqlite");
 const baselineFile = process.env.CCR_CONFIG_BASELINE ?? path.join(configDir, "config-baseline.json");
 
-if (!existsSync(configFile)) {
-  console.error(`No config database at ${configFile}`);
-  process.exit(2);
+function loadConfig() {
+  if (!existsSync(configFile)) {
+    console.error(`No config database at ${configFile}`);
+    process.exit(2);
+  }
+  const db = new DatabaseSync(configFile, { readOnly: true });
+  const row = db.prepare("SELECT value_json FROM app_config WHERE key = 'default'").get();
+  if (!row) {
+    console.error("No 'default' config row.");
+    process.exit(2);
+  }
+  return JSON.parse(row.value_json);
 }
-
-const db = new DatabaseSync(configFile, { readOnly: true });
-const row = db.prepare("SELECT value_json FROM app_config WHERE key = 'default'").get();
-if (!row) {
-  console.error("No 'default' config row.");
-  process.exit(2);
-}
-const config = JSON.parse(row.value_json);
 
 // A credential's value never enters the snapshot. Its length is enough to catch
 // a key being cleared or replaced, which is the failure that matters here.
-const secretLength = (value) => (typeof value === "string" && value ? `len:${value.length}` : "absent");
+export const secretLength = (value) => (typeof value === "string" && value ? `len:${value.length}` : "absent");
 
-function snapshot(source) {
+export function snapshot(source) {
   const providers = {};
   for (const provider of source.Providers ?? []) {
     providers[provider.name] = {
@@ -119,7 +120,7 @@ function snapshot(source) {
 
 // Compared as sorted JSON so that key order, which no consumer depends on, is
 // never reported as drift.
-function flatten(value, prefix, into) {
+export function flatten(value, prefix, into) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     for (const key of Object.keys(value).sort()) flatten(value[key], prefix ? `${prefix}.${key}` : key, into);
     return into;
@@ -128,43 +129,52 @@ function flatten(value, prefix, into) {
   return into;
 }
 
-const current = snapshot(config);
+// Importing this file must not read the config or exit the process: the test
+// imports it for snapshot and flatten, which are pure.
+function main() {
+  const config = loadConfig();
+    const current = snapshot(config);
 
-if (process.argv.includes("--show")) {
-  console.log(JSON.stringify(current, null, 2));
-  process.exit(0);
+  if (process.argv.includes("--show")) {
+    console.log(JSON.stringify(current, null, 2));
+    process.exit(0);
+  }
+
+  if (process.argv.includes("--save")) {
+    mkdirSync(path.dirname(baselineFile), { recursive: true });
+    writeFileSync(baselineFile, `${JSON.stringify(current, null, 2)}\n`);
+    console.log(`Baseline saved to ${baselineFile}`);
+    process.exit(0);
+  }
+
+  if (!existsSync(baselineFile)) {
+    console.error(`No baseline at ${baselineFile}. Run with --save once the config is correct.`);
+    process.exit(2);
+  }
+
+  const baseline = flatten(JSON.parse(readFileSync(baselineFile, "utf8")), "", new Map());
+  const now = flatten(current, "", new Map());
+  const drift = [];
+  for (const key of new Set([...baseline.keys(), ...now.keys()])) {
+    const was = baseline.get(key);
+    const is = now.get(key);
+    if (was !== is) drift.push({ is: is ?? "(removed)", key, was: was ?? "(added)" });
+  }
+
+  if (drift.length === 0) {
+    console.log(`Config matches the baseline (${now.size} values checked).`);
+    process.exit(0);
+  }
+
+  console.log(`${drift.length} value(s) drifted from the baseline:\n`);
+  for (const entry of drift.sort((a, b) => a.key.localeCompare(b.key))) {
+    console.log(`  ${entry.key}`);
+    console.log(`    baseline: ${entry.was}`);
+    console.log(`    now     : ${entry.is}`);
+  }
+  process.exit(1);
 }
 
-if (process.argv.includes("--save")) {
-  mkdirSync(path.dirname(baselineFile), { recursive: true });
-  writeFileSync(baselineFile, `${JSON.stringify(current, null, 2)}\n`);
-  console.log(`Baseline saved to ${baselineFile}`);
-  process.exit(0);
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  main();
 }
-
-if (!existsSync(baselineFile)) {
-  console.error(`No baseline at ${baselineFile}. Run with --save once the config is correct.`);
-  process.exit(2);
-}
-
-const baseline = flatten(JSON.parse(readFileSync(baselineFile, "utf8")), "", new Map());
-const now = flatten(current, "", new Map());
-const drift = [];
-for (const key of new Set([...baseline.keys(), ...now.keys()])) {
-  const was = baseline.get(key);
-  const is = now.get(key);
-  if (was !== is) drift.push({ is: is ?? "(removed)", key, was: was ?? "(added)" });
-}
-
-if (drift.length === 0) {
-  console.log(`Config matches the baseline (${now.size} values checked).`);
-  process.exit(0);
-}
-
-console.log(`${drift.length} value(s) drifted from the baseline:\n`);
-for (const entry of drift.sort((a, b) => a.key.localeCompare(b.key))) {
-  console.log(`  ${entry.key}`);
-  console.log(`    baseline: ${entry.was}`);
-  console.log(`    now     : ${entry.is}`);
-}
-process.exit(1);
