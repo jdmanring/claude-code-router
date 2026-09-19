@@ -135,3 +135,30 @@ paid lane and is the one worth reading the documentation for first.
   records the GitHub link as having opened them. The markers predate the fix.
 - ZyloAI's block lists `kimi-k3` and `step-3.7`, neither configured.
 - VSLLM's block still shows the withdrawn `glm-5.2-free`.
+
+## Applied
+
+The configuration now carries 160 models across 54 providers, down from 202.
+Sixteen providers hold a single model, and the ones still holding several are
+the three groups that should: metered per model, no model answering and left
+as the search space, or an allowance never established.
+
+Cutting the lists alone would have orphaned seventeen chain entries, because a
+chain names a model rather than a provider and several of these providers
+appear in a chain five times. The edit therefore repointed each entry at the
+kept model and dropped the duplicates that created, which also shortened the
+sonnet chain from 28 to 25 and the haiku chain from 41 to 36. Verified by
+running the config audit's dangling check over the result before writing: zero
+entries naming a provider or model that is not configured, confirmed again
+against stored config afterwards.
+
+Two lessons from the edit to the hand-written list, both caught by a dry run
+rather than by review. A heuristic reading "an indented line whose first token
+looks like an identifier" as a model line also matched prose and endpoint
+names, and would have deleted `get-api-key-identity` and `rate-limit` from
+Auriko's block along with models the list deliberately records as available
+but not configured. And matching a dropped model id across the whole document
+deletes another provider's line, because the same id appears under several
+providers. Scope such an edit to the provider's own block, and drive it from
+the difference between two configuration snapshots rather than from what a
+line looks like.
