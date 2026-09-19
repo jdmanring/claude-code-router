@@ -91,30 +91,34 @@ project memory and are not revisited here.
 
 Status: `as documented`, `no endpoint`.
 
-## Account meters as read on 2026-09-19
+## What each provider's meter measures
 
-Eighteen providers reporting. Recorded because several of these numbers explain
-a sweep result that otherwise reads as a fault:
+Eighteen providers report a meter. What matters here is the shape, because it
+decides whether a reading can explain a sweep result: the values themselves are
+one account's state on one morning and are stale by the afternoon. Take the
+current numbers from `node scripts/provider-allowance.mjs`.
 
-| Provider | Reading |
+| Provider | What the meter reports |
 | --- | --- |
-| Claude Code API | 5h 93%, 7d 58% remaining |
-| Codex API | primary quota 0%, resets 2026-10-13 |
-| OpenRouter | a balance in USD |
-| Tokenreply | a balance meter in USD |
-| XKIRO | a daily token allowance free tokens |
-| ZyloAI | a daily token allowance daily tokens, a daily request allowance |
-| Go, OpenCode Go Responses | 5h 100%, weekly 100%, monthly 80% |
-| Yolo-Auto | 10 of 15 daily requests |
-| Electronhub | credits 0.25, Neutrino balance not exposed |
-| Orcarouter | paid balance 0, **free credit 6** |
-| Vercel | a negative balance |
-| Venice, AIHubMix, Tokenrouter, Bazaarlink | zero balance |
-| VSLLM | allowance spent, 0 of 1000 |
+| Claude Code API | rolling 5-hour and 7-day windows, as percentages |
+| Codex API | a primary quota percentage with a dated reset |
+| OpenRouter, Tokenreply, Vercel, Bazaarlink, Tokenrouter | a balance in USD |
+| XKIRO, ZyloAI | daily token allowance, ZyloAI a daily request count as well |
+| Go, OpenCode Go Responses | 5-hour, weekly and monthly windows, as percentages |
+| Yolo-Auto | a daily request count |
+| Electronhub | a credit figure, while the Neutrino balance that gates `:free` models is not exposed at all |
+| Orcarouter | paid balance and free credit separately |
+| VSLLM | a granted-and-used allowance in quota units |
 
-Orcarouter is worth a second look: the account holds 6 units of free credit
-while every free model still refuses with the GitHub-account message, so the
-gate is on the model tier rather than on the balance.
+Two of these shapes explain a sweep result that otherwise reads as a fault. A
+percentage quota at zero is an account that will answer 429 to every probe, so
+reading the meter first is cheaper than the sweep. And Electronhub's credit
+figure stays healthy while its `:free` models refuse, because the balance they
+spend is the one the connector cannot see.
+
+Orcarouter is worth a second look: the account holds free credit while every
+free model still refuses with the GitHub-account message, so the gate is on the
+model tier rather than on the balance.
 
 ### The class this audit turned up: usage that arrives in response headers
 
@@ -471,7 +475,7 @@ GitHub account, all four configured free models answer with real output tokens
 alternative to the link, never the requirement.
 
 **v0 was reported wrongly and the account proves it.** `/v1/user/billing`
-returns plan `v0-level0` with cycle credit largely unspent remaining this cycle, and
+returns a `v0-level0` plan with nearly all of its cycle credit unspent, and
 `/v1/rate-limits` returns a limit of 10 with a daily 7. So the free access is
 real and the earlier "requires a Premium or Team plan" verdict, taken from a
 search summary rather than the account, was wrong. The 404 is not a plan gate
@@ -1010,7 +1014,7 @@ What settles it:
   is no sibling route either.
 - Another user reports the identical symptom on Vercel's own forum, unanswered.
 
-The free plan being real, cycle credit unspent remaining, was never the contradiction
+The free plan being real, with its cycle credit largely unspent, was never the contradiction
 it looked like: that credit is for the v0 product, not for an inference API
 that no longer exists. The "requires a Premium or Team plan" reading came from
 search results written while the API was live.
