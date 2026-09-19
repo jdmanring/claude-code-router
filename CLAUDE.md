@@ -258,6 +258,15 @@ of those two faults surfacing as the provider's own error. And the configured mo
 is often the paid one while the provider's catalogue lists free siblings that
 answer 200 on the same key with no balance.
 
+A sweep tries a provider's first configured model and nothing else, so one
+moved, withdrawn or quota-spent lead model reads as the whole provider being
+down. Probe the entire configured list one model at a time before concluding:
+four providers here were failing on their lead alone while the rest of their
+models answered on the same credential. Quota is often per model family rather
+than per account, so the exhausted tier and the working tier sit side by side
+in one provider. The reading that separates an account gate from a moved model
+is whether *every* model returns the same error.
+
 A provider that fronts several upstreams bills per upstream, so the prefix on
 the model id chooses the pool and the same model is free under one and charged
 under another. Measured on Requesty: `google/gemma-4-31b-it` answers while
