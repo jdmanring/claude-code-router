@@ -215,16 +215,20 @@ export function resetTargetCooldownsForTest(): void {
  * because the window length already encodes how long each has been failing. It
  * is the one closest to being retried on purpose.
  *
- * Returns the last index when any entry is live, so the existing guarantee is
- * unchanged in the ordinary case and only the all-cooling case moves.
+ * Returns -1 while any entry is live, because that entry is attempted normally
+ * and nothing needs forcing. Forcing the last entry regardless was the defect
+ * this replaces: a dead account sitting last was attempted on every request
+ * that reached the end of the chain, overriding the cooldown that had already
+ * learned it could not answer. Measured 2026-09-19, 63 times in a quarter of
+ * an hour against a balance of zero.
  */
 export function lastResortIndex(targets: readonly (string | undefined)[]): number {
-  if (targets.length === 0) return -1;
   let bestIndex = -1;
   let bestRemaining = Number.POSITIVE_INFINITY;
   for (const [index, target] of targets.entries()) {
     const remaining = targetCooldownRemainingMs(target);
-    if (remaining <= 0) return targets.length - 1;
+    // Something can still be attempted normally, so nothing has to be forced.
+    if (remaining <= 0) return -1;
     if (remaining < bestRemaining) {
       bestRemaining = remaining;
       bestIndex = index;

@@ -226,12 +226,22 @@ test("when every entry is cooling, the least-cooled one is the last resort", () 
   assert.equal(lastResortIndex(chain), 1, "the shortest remaining window is the better bet");
 });
 
-test("a live entry anywhere leaves the last index as the safety net", () => {
-  // The control. While anything can still be attempted normally the existing
-  // guarantee must not move, or this changes behaviour in the ordinary case.
+test("a live entry anywhere means nothing is forced", () => {
+  // Forcing the last entry regardless was the defect: a dead account sitting
+  // last was attempted on every request that reached the end of the chain,
+  // overriding the cooldown that had already learned it could not answer.
+  // Measured 2026-09-19, 63 attempts in a quarter of an hour against a zero
+  // balance. A live entry is attempted normally, so nothing needs forcing.
   const chain = ["p::y/a", "p::y/b", "p::y/c"];
   markTargetFailure(chain[0], 600_000);
-  assert.equal(lastResortIndex(chain), chain.length - 1);
+  assert.equal(lastResortIndex(chain), -1);
+});
+
+test("a cooling entry at the end is not attempted while an earlier one is live", () => {
+  // The shape that took the user's session down: the dead account was last.
+  const chain = ["p::z/live", "p::z/dead"];
+  markTargetFailure(chain[1], 600_000);
+  assert.equal(lastResortIndex(chain), -1, "the dead tail must not be forced");
 });
 
 test("lastResortIndex on an empty chain is not an index", () => {

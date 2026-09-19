@@ -159,6 +159,16 @@ class GatewayService {
     await this.stop({ nextConfig: config });
     this.config = config;
     const coreAuthToken = generateCoreGatewayAuthToken();
+    // Published as soon as it exists, not once the whole start sequence has
+    // finished. The request listener accepts traffic while the rest of startup
+    // is still running, and an attempt built in that window used to read an
+    // empty token and throw "Core gateway auth token is not initialized",
+    // which aborts the whole fallback chain rather than failing one entry: the
+    // token addresses the gateway child that every attempt goes through, so no
+    // other chain entry could have answered either. Measured 2026-09-19, the
+    // window produced 502s on five separate occasions. Every failure path
+    // below still clears it.
+    this.coreAuthToken = coreAuthToken;
     const scriptValidationErrors = await this.routeScriptRuntime.prepare(config.Router.rules);
     this.plugin = new ClaudeCodeRouterPlugin(config, {
       scriptRuntime: this.routeScriptRuntime,
