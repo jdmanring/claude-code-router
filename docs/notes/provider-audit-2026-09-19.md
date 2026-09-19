@@ -489,3 +489,26 @@ Against a literal it does not: `"$.data.total_granted / 500000"` produced no
 meter. The earlier note said only the second half.
 
 Tracked providers: 13 at the start of this session, 22 now.
+
+## Endpoint discovery is exhausted for the untracked tier
+
+Two wins this session (Naga, Routeway) came from `/v1/account/balance`, a shape
+the earlier discovery sweep had not tried, so it was worth trying across
+everything else. Both passes came back empty and both were controlled:
+
+- **With the inference key**, 33 untracked providers were asked for
+  `/account/balance`, `/account/usage`, `/account/credits` and `/account`.
+  Zero returned a body carrying a consumption figure. The filter was run first
+  against Routeway (`{"balance":0}`) and Naga (`{"balance":"0"}`) and reported
+  consumption for both, so it can see a numeric zero and a quoted zero, which
+  is the artifact that produced a false `0/43` earlier in this project.
+- **Looking for the opposite signal**, the same providers were asked again over
+  six paths, keeping only 401 and 403 answers whose body mentions a scope,
+  permission, provisioning or management credential. That is the shape Requesty
+  ("API key does not have manage permissions") and Routeway ("Account key
+  missing required scopes") produced, and both strings match the filter. Zero
+  untracked providers answered that way.
+
+So no untracked provider here hides an account route group behind a
+console-issued credential. What remains is per-provider documentation, which
+cannot be enumerated and has to be read one at a time.
