@@ -10,6 +10,7 @@ import {
   removeOpenCodeProviderAccountConfig
 } from "@ccr/core/agents/local-providers/opencode.ts";
 import { localAgentProviderApiKey } from "@ccr/core/agents/local-providers/shared.ts";
+import { createBetterSqliteDatabase } from "@ccr/core/storage/sqlite-native.ts";
 
 test("OpenCode local provider imports Zen models using each model's native protocol", async () => {
   await withOpenCodeHome(async (home) => {
@@ -535,6 +536,75 @@ function candidateForId(candidates, id) {
   const candidate = candidates.find((item) => item.id === id);
   assert.ok(candidate, `Expected OpenCode candidate ${id}`);
   return candidate;
+}
+
+test("OpenCode 2.x keeps its credential in opencode.db and it is still found", async () => {
+  // Earlier releases wrote auth.json; 2.0.9 writes this table instead, and a
+  // signed-in install was invisible to the candidate scan because of it.
+  await withOpenCodeHome(async (home) => {
+    writeOpenCodeCredentialRow(home, { active: 1, integration: "opencode-go", value: { key: "opencode-go-key", type: "api" } });
+    writeOpenCodeGoCatalog(home);
+    const stored = goCandidatesFromDatabase();
+    assert.ok(stored.length > 0, "opencode-go should be offered once its credential is stored");
+    for (const candidate of stored) assert.match(candidate.sourceFile, /opencode\.db$/);
+  });
+});
+
+test("a stored credential for the other integration does not answer for this one", async () => {
+  await withOpenCodeHome(async (home) => {
+    writeOpenCodeCredentialRow(home, { active: 1, integration: "opencode", value: { key: "zen-key", type: "api" } });
+    writeOpenCodeGoCatalog(home);
+    assert.deepEqual(goCandidatesFromDatabase(), [], "the Zen row must not import as Go");
+  });
+});
+
+test("an inactive stored credential is not imported", async () => {
+  await withOpenCodeHome(async (home) => {
+    writeOpenCodeCredentialRow(home, { active: 0, integration: "opencode-go", value: { key: "opencode-go-key", type: "api" } });
+    writeOpenCodeGoCatalog(home);
+    assert.deepEqual(goCandidatesFromDatabase(), [], "active = 0 must not be imported");
+  });
+});
+
+test("a database without the credential table is not an error", async () => {
+  // This read happens while listing candidates, so a reshaped or older
+  // database has to mean no credential rather than a thrown scan.
+  await withOpenCodeHome(async (home) => {
+    const directory = path.join(home, ".local", "share", "opencode");
+    mkdirSync(directory, { recursive: true });
+    const database = createBetterSqliteDatabase(path.join(directory, "opencode.db"));
+    database.exec("CREATE TABLE unrelated (id TEXT)");
+    database.close();
+    assert.doesNotThrow(() => opencodeCandidates());
+  });
+});
+
+// A candidate's id carries its protocol, so match on the provider prefix and
+// on the source file, which is what says the database read is what supplied it.
+function goCandidatesFromDatabase() {
+  return opencodeCandidates().filter((entry) =>
+    String(entry.id ?? "").startsWith("opencode-go") && String(entry.sourceFile ?? "").endsWith("opencode.db"));
+}
+
+function writeOpenCodeCredentialRow(home, row) {
+  const directory = path.join(home, ".local", "share", "opencode");
+  mkdirSync(directory, { recursive: true });
+  const database = createBetterSqliteDatabase(path.join(directory, "opencode.db"));
+  database.exec("CREATE TABLE IF NOT EXISTS credential (id TEXT, integration_id TEXT, label TEXT, value TEXT, active INTEGER)");
+  database.prepare("INSERT INTO credential (id, integration_id, label, value, active) VALUES (?, ?, ?, ?, ?)")
+    .run("cred_test", row.integration, "OpenCode", JSON.stringify(row.value), row.active);
+  database.close();
+}
+
+function writeOpenCodeGoCatalog(home) {
+  writeOpenCodeCatalog(home, {
+    "opencode-go": {
+      api: "https://opencode.ai/zen/go/v1",
+      models: { "go-chat": { name: "Go Chat", provider: { npm: "@ai-sdk/openai-compatible" } } },
+      name: "OpenCode Go",
+      npm: "@ai-sdk/openai-compatible"
+    }
+  });
 }
 
 async function withOpenCodeHome(run) {

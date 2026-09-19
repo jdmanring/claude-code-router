@@ -28,6 +28,7 @@ import {
   uniqueStrings
 } from "@ccr/core/agents/local-providers/shared";
 import { findProviderPresetByBaseUrl } from "@ccr/core/providers/presets/index";
+import { createBetterSqliteDatabase } from "@ccr/core/storage/sqlite-native";
 
 type OpenCodeCredential = {
   apiKey?: string;
@@ -363,6 +364,11 @@ function readOpenCodeCredential(providerId: OpenCodeProviderId): OpenCodeCredent
     }
   }
 
+  const stored = readOpenCodeDatabaseCredential(providerId);
+  if (stored) {
+    return stored;
+  }
+
   const environmentNames = providerId === "opencode-go"
     ? ["OPENCODE_GO_API_KEY", "OPENCODE_API_KEY"]
     : ["OPENCODE_API_KEY"];
@@ -376,6 +382,54 @@ function readOpenCodeCredential(providerId: OpenCodeProviderId): OpenCodeCredent
   return configuredApiKeyPresent
     ? { hasCredential: true, sourceFile: config.sourceFile || "OpenCode config" }
     : undefined;
+}
+
+/**
+ * OpenCode 2.x keeps its credentials in `opencode.db` rather than the
+ * `auth.json` earlier releases wrote, so a signed-in install is invisible to
+ * the file scan above. The stored value has the same shape `auth.json` held
+ * for one integration, so it is handed to the same reader rather than parsed
+ * a second way.
+ *
+ * Read-only and best effort: a locked, absent or reshaped database means no
+ * credential, never an error, because this runs while listing candidates.
+ */
+function readOpenCodeDatabaseCredential(providerId: OpenCodeProviderId): OpenCodeCredential | undefined {
+  const sourceFile = path.join(openCodeDataRoot(), "opencode.db");
+  if (!existsSync(sourceFile)) {
+    return undefined;
+  }
+  let database;
+  try {
+    database = createBetterSqliteDatabase(sourceFile, { fileMustExist: true, readonly: true });
+    const rows = database
+      .prepare("SELECT integration_id, value FROM credential WHERE active = 1")
+      .all() as Array<{ integration_id?: unknown; value?: unknown }>;
+    for (const row of rows) {
+      if (readString(row.integration_id) !== providerId) {
+        continue;
+      }
+      const value = readString(row.value);
+      if (!value) {
+        continue;
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        parsed = value;
+      }
+      const credential = openCodeCredentialFromRecord({ [providerId]: parsed }, providerId, sourceFile);
+      if (credential) {
+        return credential;
+      }
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  } finally {
+    try { database?.close(); } catch { /* the read is done either way */ }
+  }
 }
 
 function openCodeCredentialFromRecord(
