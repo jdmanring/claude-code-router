@@ -1559,6 +1559,7 @@ export class RequestLogStore {
       "DELETE FROM request_logs WHERE source_usage_id IS NULL AND created_at < ?",
     ).run(cutoff);
     deleteRequestLogBodyRefs(this.bodyDir, refs);
+    reclaimRequestLogPages(database);
     this.lastRetentionCleanupDay = dayKey;
   }
 
@@ -5623,6 +5624,49 @@ function normalizeBodyRef(value: string | undefined): string | undefined {
     return undefined;
   }
   return normalized;
+}
+
+
+/**
+ * Deleting a row hands its pages to SQLite's freelist, which the file keeps
+ * forever: the database has no auto_vacuum, so daily retention shrinks the
+ * contents and never the file. Measured on one install: 345.6 MB on disk, of
+ * which 344.5 MB was freelist and 1.1 MB was data, holding 28 rows.
+ *
+ * VACUUM rewrites the whole file and takes a write lock, so it is worth doing
+ * only when there is a real amount to recover.
+ */
+export function shouldReclaimRequestLogPages(
+  freePages: number,
+  totalPages: number,
+  pageSize: number
+): boolean {
+  if (!Number.isFinite(freePages) || !Number.isFinite(totalPages) || !Number.isFinite(pageSize)) {
+    return false;
+  }
+  if (freePages <= 0 || totalPages <= 0 || pageSize <= 0) {
+    return false;
+  }
+  // Both must hold: enough waste to be worth a rewrite, and enough of the file
+  // to be worth the lock. A small database that is mostly free stays alone.
+  return freePages * pageSize >= reclaimMinimumFreeBytes && freePages / totalPages >= reclaimMinimumFreeRatio;
+}
+
+const reclaimMinimumFreeBytes = 64 * 1024 * 1024;
+const reclaimMinimumFreeRatio = 0.5;
+
+function reclaimRequestLogPages(database: SqlDatabase): void {
+  try {
+    const pageSize = firstNumber(queryRows(database, "PRAGMA page_size"), "page_size");
+    const pageCount = firstNumber(queryRows(database, "PRAGMA page_count"), "page_count");
+    const freeCount = firstNumber(queryRows(database, "PRAGMA freelist_count"), "freelist_count");
+    if (!shouldReclaimRequestLogPages(freeCount, pageCount, pageSize)) {
+      return;
+    }
+    database.exec("VACUUM");
+  } catch {
+    // Reclaiming space is maintenance, never a reason to fail a write path.
+  }
 }
 
 function deleteRequestLogBodyRefs(bodyDir: string, refs: string[]): void {
