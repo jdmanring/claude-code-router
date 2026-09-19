@@ -678,3 +678,37 @@ and the proxy publishes none. Project memory already records why this provider
 goes down and where its fix belongs.
 
 Status: `no endpoint`; out of scope for provider usage tracking.
+
+## Dependency advisories cleared, and one thing the bump surfaced
+
+`npm audit` went from nine findings to zero: a critical node-tar crash and
+denial of service, ten xmldom injection and complexity findings, six
+brace-expansion denial-of-service findings, a fastify schema validation bypass
+and X-Forwarded spoofing, three undici findings, a js-yaml CPU finding, an
+Electron session cache mix-up and an esbuild development-server file read.
+Every transitive fix is pinned inside the line its consumers already use.
+
+Two notes worth keeping.
+
+**A fork-local pin was holding one open.** The override read
+`pm2: { js-yaml: "4.3.1" }`, which is exactly the last vulnerable release. This
+is the second time this session that one of our own pins, not an upstream
+omission, was the thing keeping a package vulnerable; `fast-uri` was the first.
+When an advisory names a package this repository overrides, read the override
+before reading the dependency.
+
+**The published package resolves its own tree.** `packages/cli/package.json`
+carries no `overrides`, so a global install does not inherit the root ones.
+Fixing the monorepo audit is therefore not the same as fixing what runs.
+Measured on the installed tree after reinstalling: undici 6.28.1 and 7.29.1,
+fastify 5.12.5, brace-expansion 5.0.12, fast-uri 3.1.8 and 4.2.1, all fixed,
+and tar, js-yaml and xmldom are not present in it at all because they were
+build and Electron side.
+
+**fastify 5.12.5 deprecates an option the vendored runtime uses.** The gateway
+child now logs `FSTDEP023: disableRequestLogging option is deprecated ... will
+be removed in fastify@6`. The string appears in
+`@the-next-ai/ai-gateway/dist/index.js` and in none of `packages/*/src`, so it
+is the vendored runtime's call, not ours. It works today and is a warning, not
+a fault, but a fastify 6 bump will break that runtime until the vendor moves to
+`logController`.
