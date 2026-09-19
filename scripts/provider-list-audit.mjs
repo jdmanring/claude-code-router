@@ -40,6 +40,12 @@ export const listNameAliases = {
   "zen": "opencode zen"
 };
 
+/**
+ * A provider may appear more than once on purpose: the list carries some of
+ * them in a plans section and again in a free-tier section, with a
+ * cross-reference. Each appearance is kept separately so a check for a
+ * repeated field does not fire on the document's own structure.
+ */
 export function blockHeadings(text) {
   const headings = new Map();
   let current;
@@ -48,11 +54,18 @@ export function blockHeadings(text) {
     if (isHeading) {
       current = line.split(" - ")[0].split(" — ")[0].trim().toLowerCase();
       if (!headings.has(current)) headings.set(current, []);
+      headings.get(current).push([]);
     } else if (current) {
-      headings.get(current).push(line);
+      const occurrences = headings.get(current);
+      occurrences[occurrences.length - 1].push(line);
     }
   }
   return headings;
+}
+
+/** Every line of every appearance, for checks that do not care where it sat. */
+export function blockText(occurrences) {
+  return occurrences.flat().join(" ");
 }
 
 export function headingFor(providerName, headings) {
@@ -71,18 +84,30 @@ function main() {
 
   const missing = [];
   const disagree = [];
+  const duplicated = [];
   for (const provider of providers) {
     const heading = headingFor(provider.name, headings);
     if (!heading) { missing.push(provider.name); continue; }
-    const says = /usage tracking:\s*tracked/i.test(headings.get(heading).join(" "));
+    const occurrences = headings.get(heading);
+    const says = /usage tracking:\s*tracked/i.test(blockText(occurrences));
     const is = provider.account?.enabled === true;
     if (says !== is) disagree.push(`${provider.name}: list says tracked=${says}, config says ${is}`);
+    // Two tracking lines in ONE appearance means one is stale, and which wins
+    // depends on which a reader reaches first. Two appearances carrying one
+    // line each is the document's own structure and is fine.
+    for (const [index, body] of occurrences.entries()) {
+      const trackingLines = body.filter((line) => /^\s*usage tracking:/i.test(line)).length;
+      if (trackingLines > 1) duplicated.push(`${provider.name}: appearance ${index + 1} has ${trackingLines} tracking lines`);
+    }
   }
 
   for (const name of missing) console.log(`NO BLOCK   ${name}`);
   for (const line of disagree) console.log(`DISAGREES  ${line}`);
-  console.log(`\n${providers.length} enabled providers: ${missing.length} with no block, ${disagree.length} whose tracking claim disagrees with the config`);
-  process.exitCode = missing.length + disagree.length > 0 ? 1 : 0;
+  for (const line of duplicated) console.log(`DUPLICATED ${line}`);
+  console.log(`\n${providers.length} enabled providers: ${missing.length} with no block, `
+    + `${disagree.length} whose tracking claim disagrees with the config, `
+    + `${duplicated.length} with more than one tracking line`);
+  process.exitCode = missing.length + disagree.length + duplicated.length > 0 ? 1 : 0;
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {

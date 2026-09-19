@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { blockHeadings, headingFor, listNameAliases } from "./provider-list-audit.mjs";
+import { blockHeadings, blockText, headingFor, listNameAliases } from "./provider-list-audit.mjs";
 
 const sample = [
   "SOME SECTION HEADING:",
@@ -31,8 +31,27 @@ test("an all-caps section heading is not mistaken for a provider", () => {
 
 test("indented lines belong to the block above them", () => {
   const headings = blockHeadings(sample);
-  assert.match(headings.get("groq").join(" "), /qwen3\.8-27b/);
-  assert.ok(!headings.get("groq").join(" ").includes("/v1/credits"), "a block must not absorb the next one");
+  assert.match(blockText(headings.get("groq")), /qwen3\.8-27b/);
+  assert.ok(!blockText(headings.get("groq")).includes("/v1/credits"), "a block must not absorb the next one");
+});
+
+test("a provider listed twice keeps each appearance separate", () => {
+  // The list carries some providers in a plans section and again in a
+  // free-tier section. Merging them makes one tracking line per appearance
+  // look like a duplicated field.
+  const twice = [
+    "Groq - plans section",
+    "    usage tracking: tracked",
+    "",
+    "Groq - free section",
+    "    usage tracking: tracked",
+    ""
+  ].join("\n");
+  const occurrences = blockHeadings(twice).get("groq");
+  assert.equal(occurrences.length, 2, "two appearances, not one merged block");
+  for (const body of occurrences) {
+    assert.equal(body.filter((l) => /usage tracking:/.test(l)).length, 1);
+  }
 });
 
 test("a provider is found under its brand name through the alias table", () => {
@@ -46,5 +65,24 @@ test("every alias points at a different name than its key", () => {
   // An alias equal to its key is a no-op that hides a genuinely missing block.
   for (const [key, value] of Object.entries(listNameAliases)) {
     assert.notEqual(key, value, `alias for ${key} does nothing`);
+  }
+});
+
+test("a provider listed twice keeps each appearance separate", () => {
+  // The list carries some providers in a plans section and again in a free
+  // section. Merging the two made one tracking line per appearance look like a
+  // duplicated field, and the checker reported three faults that were not there.
+  const twice = [
+    "Groq - plans section",
+    "    usage tracking: tracked",
+    "",
+    "Groq - free section",
+    "    usage tracking: tracked",
+    ""
+  ].join("\n");
+  const occurrences = blockHeadings(twice).get("groq");
+  assert.equal(occurrences.length, 2, "two appearances, not one merged block");
+  for (const body of occurrences) {
+    assert.equal(body.filter((line) => /usage tracking:/.test(line)).length, 1);
   }
 });
