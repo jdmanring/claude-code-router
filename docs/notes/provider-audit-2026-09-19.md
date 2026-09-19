@@ -414,9 +414,13 @@ side is not reached.
 So the verdict belongs to the runtime rather than to the providers. Writing "no
 endpoint" against Groq and its peers is accurate and complete, and the only way
 to change it is a change in the vendored runtime.
-`local-plugins/gateway-upstream-usage-headers.mjs` is left present and disabled
-as the probe that re-tests this after a runtime upgrade: a line below its
-registration line means the path has opened.
+The probe that established all of this has since been **deleted** rather than
+kept disabled. A file that runs nothing is not a record; this note is. To
+re-test after a runtime upgrade, register a plugin returning
+`providerHooks: [{ key, transformResponse(input) }]`, log
+`input.upstreamResponse?.headers`, restart the gateway child and send one
+request: a line below the registration line means the path has opened. That is
+about twenty lines.
 
 ## Untracked tier: the balance endpoints are real, behind a second credential
 
