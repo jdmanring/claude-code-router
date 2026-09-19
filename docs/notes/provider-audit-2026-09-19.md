@@ -1060,3 +1060,39 @@ in a healthy chain looks alive.
 The 422s are not evidence of an Anthropic-shaped endpoint either: `/v1/messages`
 and `/v1/responses` on `api.v0.dev` both answer 404 today, so that status came
 from CCR's own adapter rejecting the request before it left.
+
+## Later on 2026-09-19: two providers dropped, and a sweep that cost more than it told
+
+`scripts/provider-working-model.mjs`, named above, no longer exists. Calling
+providers directly meant reimplementing every protocol, every required header
+and every response shape, and it got four verdicts wrong doing it: Google
+Gemini, Claude Code API, Codex API and OpenCode Go Responses were all judged on
+`/chat/completions` when none of them speaks it, while Go failed on a missing
+`x-opencode-session` that CCR supplies and GitHub-Copilot-Free returned SSE the
+parser could not read. All six answer 200 through CCR. The capability moved
+into `provider-sweep --all-models`, which judges a provider on its own chain
+attempt and so survives a fallback answering in its place.
+
+**Meta and Venice were removed from the configuration.** Both are paid products
+with no free tier, documented in the gates section of the provider list and now
+marked there as removed rather than deleted, so the research survives the
+disposition. 56 providers became 54.
+
+**An unscoped sweep was launched to answer a question about a handful of
+providers, and was stopped.** It spent requests against roughly forty providers
+already measured working the same session. Three mechanical faults compounded
+it: the run was piped through `tail -22`, which discarded every line above the
+window as it was produced, so a 54-provider run left 24 lines; `--json` was
+written only on completion, so stopping the run lost the ledger entirely; and
+37 providers returned `fetch failed` in one pass, a transport fault at this end
+rather than 37 provider faults. Everything the run established:
+
+| | |
+| --- | --- |
+| answered | Go, Agnes-Paid, Huggingface, OpenCode Go Responses, Intern AI |
+| refused | OVH 403, Codex API 429, AIHubMix 200-no-output, v0 404 |
+
+Nine providers out of fifty-four. The sweep now writes its ledger per provider
+rather than at the end, and the discipline is recorded in CLAUDE.md: scope with
+the provider names, redirect to a file, and state the request count before
+launching.
