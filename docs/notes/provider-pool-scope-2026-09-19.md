@@ -43,12 +43,30 @@ rest. Three move the lead: Routeway, SEA-LION and GonkaBroker currently lead
 with a flash-class model while carrying a larger one, which under a request
 budget is capacity given away.
 
-**Literouter is the one that cannot be decided from the catalogue.** Only
-`mistral-medium-2508:free` has ever answered; `gpt-oss-120b:free` and
-`qwen3.8-27b:free` are both larger and both untested. Its own limit is one
-message every seven seconds, so settling it costs two requests spaced by that,
-and guessing instead risks trading a model known to answer for one that does
-not.
+**Literouter is settled, and the catalogue was the reason it could not be
+decided from the configuration.** It publishes 443 models, and the free tier
+includes `mistral-large-3:free`, `glm-5:free` and `deepseek-v3.2:free`, none of
+which was configured. Four candidates were called directly, spaced by the
+seven seconds the provider enforces, and all four answered 200:
+
+| Model | Status | Output tokens | Latency |
+| --- | --- | --- | --- |
+| `mistral-large-3:free` | 200 | 2 | 3.2s |
+| `glm-5:free` | 200 | 39 | 3.5s |
+| `deepseek-v3.2:free` | 200 | 2 | 1.5s |
+| `gpt-oss-120b:free` | 200 | 54 | 19.4s |
+
+The configured lead was `mistral-medium-2508:free`, which under a 50-requests-a-day
+budget is a smaller model from the same family as one that answers. The pick is
+`mistral-large-3:free`. Between it, `glm-5:free` and `deepseek-v3.2:free` the
+choice is a preference rather than a measurement: all three are flagship tier
+and all three answer, and nothing available here ranks them.
+
+**Groq keeps the qwen id rather than the larger model, deliberately.** Its two
+models are `qwen/qwen3.8-27b` and `openai/gpt-oss-120b`, and the 120B is the
+more capable. The gateway strips a leading segment matching the protocol
+vendor, so `openai/gpt-oss-120b` addressed on `openai_chat_completions` reaches
+Groq as `gpt-oss-120b`. `qwen/` does not collide. Deliverability decides it.
 
 ## A budget of money or tokens: one model, fewest tokens for the work
 
@@ -56,7 +74,7 @@ not.
 | --- | --- | --- | --- |
 | Huggingface | monthly inference credit | 5 | `inclusionAI/Ling-3.0-flash-Fin:novita` |
 | ZyloAI | 200,000 tokens a day | 3 | `gpt-oss-20b` |
-| XKIRO | 500,000 tokens a day | 2 | unsettled, see below |
+| XKIRO | 500,000 tokens a day | 2 | `minimax/minimax-m3:free` |
 | VSLLM | one key quota | 2 | `glm-4.7-flash-free` |
 | Bazaarlink | one credit pool | 4 | `deepseek/deepseek-v4-flash-0731free:free` |
 | Orcarouter | one workspace allowance | 4 | `deepseek/deepseek-v4-flash-free` |
@@ -106,10 +124,13 @@ paid lane and is the one worth reading the documentation for first.
 
 - SEA-LION carries `BAAI/bge-m3`, which is an embedding model and cannot answer
   a chat request at all. It occupies a chain slot and can only fail.
-- XKIRO's configured models are `minimax/minimax-m3:free` and
-  `qwen/qwen3.8-max:free`, while its block records "MiniMax M3 (Free)" and
-  "DeepSeek V4.1 Flash (Free)". One of the two is stale and the pick depends on
-  which.
+- XKIRO's block was the stale side, not the configuration. Both configured ids
+  are published, and the catalogue carries **no DeepSeek model on the free
+  tier at all**: every `deepseek/` id there is paid, so "DeepSeek V4.1 Flash
+  (Free)" describes nothing. Asked the same question, `minimax/minimax-m3:free`
+  spent 35 output tokens and `qwen/qwen3.8-max:free` spent 39. One sample four
+  tokens apart does not separate them, so the existing lead stands on the
+  grounds that it is already the lead, not on the measurement.
 - Orcarouter's four models are still marked `[gate]` although the gates section
   records the GitHub link as having opened them. The markers predate the fix.
 - ZyloAI's block lists `kimi-k3` and `step-3.7`, neither configured.
