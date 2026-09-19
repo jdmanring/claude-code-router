@@ -512,3 +512,48 @@ everything else. Both passes came back empty and both were controlled:
 So no untracked provider here hides an account route group behind a
 console-issued credential. What remains is per-provider documentation, which
 cannot be enumerated and has to be read one at a time.
+
+### Alibaba (Model Studio, international) - free tier is time limited
+
+Documentation: `alibabacloud.com/help/en/model-studio/`. The configured base
+url `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` is the documented
+OpenAI-compatible one. A new account gets **1,000,000 tokens per eligible
+model, valid for 90 days** from activating Model Studio on the Singapore
+endpoint. Usage is visible in the Alibaba Cloud console only; no account or
+quota endpoint is published for the compatible-mode API.
+
+Worth flagging because it is the only expiring allowance found here: it will
+stop working on a date rather than on a number, and nothing in CCR will say
+why.
+
+Status: `as documented`, `no endpoint`.
+
+### SambaNova - the free tier is the one without a payment method
+
+Documentation: `docs.sambanova.ai/docs/en/models/rate-limits`. The Free Tier
+applies **when no payment method is linked**: 30 requests a minute and no total
+token cap. Linking a payment method moves the account to the Developer Tier,
+which raises concurrency but caps it at 20M tokens a day across all models.
+Separately, $5 of credit is granted and expires after three months.
+
+This one is the inverse of the deposit gates elsewhere in this audit: adding
+payment does not unlock the free tier, it replaces it. No usage endpoint is
+published.
+
+Status: `as documented`, `no endpoint`.
+
+### Ollama Cloud - works, but not on the documented host
+
+Documentation: `docs.ollama.com/cloud`. It gives the base url as
+`https://api.ollama.com/v1`, while the configured one here is
+`https://ollama.com/v1`. The configured form answers 200 in the sweep, so it is
+served, but the documented host is the one to prefer if it ever stops.
+
+The free tier is metered by **GPU time rather than tokens**, with one
+concurrent request, session limits resetting every five hours and weekly limits
+resetting every seven days. The numbers themselves are not published, so there
+is nothing to map a meter onto even if an endpoint existed. No account endpoint
+is published.
+
+Status: `as documented`; `no endpoint`; base url differs from the documented
+host and is worth changing on the next failure.
