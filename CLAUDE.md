@@ -245,7 +245,7 @@ the live install, and each has its pure judgement pinned by tests run with
 | Which configured model ids does the provider still publish | `scripts/model-catalog-audit.mjs` | 4 |
 | Has anything in the config moved since it was known good | `scripts/config-audit.mjs` | 6 |
 | What did one request actually do | `scripts/ccr-log.mjs` | none |
-| Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 5 |
+| Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 10 |
 
 Two properties worth keeping. **Importing any of them must not run the job**:
 the imperative part sits behind an `import.meta.url` entrypoint check, because
@@ -256,11 +256,36 @@ traffic. `provider-sweep --all-models` tries every configured model instead of
 the lead, which is how a provider whose lead model was withdrawn stops reading
 as dead.
 
+**Scope a sweep with `--only` and never pipe it through `tail`.** The sweep
+spends a request per provider against someone's account, so running the whole
+set to answer a question about a handful of them is quota spent on providers
+already known good. It also contends with itself: an unscoped run here produced
+`fetch failed` for 37 providers in one pass, which is a transport fault at this
+end and not 37 provider faults. Pass the providers in question to `--only`,
+send the output to a file and tail the file, because piping the run itself
+through `tail` discards every line above the window as it is produced and the
+`--json` ledger is only written at the end.
+
 What each one's tests are actually for: `producedNoOutput` decides whether a
 200 counts as a working provider, so its tests pin the cases where it must
 *not* fire; the config audit's dangerous failure is a false "matches baseline",
 so its tests pin the fields the snapshot has to carry, including the one it
 lost once.
+
+The list audit runs in both directions, and the reverse one is the reason it
+grew. Checking only that every configured provider has a block cannot see a
+provider **removed** from the config: its block stays behind and still reads as
+live, while the forward check passes because nothing is missing. A block
+stating a tracking verdict is therefore treated as a claim about the running
+config and has to resolve to a configured provider, with blocks saying "not
+configured" exempt so the deliberate not-yet-connected entries stay quiet.
+
+That covers one shape and only one: a full provider block carrying a tracking
+line. It says nothing about a provider named in a single prose line inside the
+gates section, which is how Meta and Venice were recorded, so removing those
+two left nothing for it to find. The check reads 0 orphans against 54
+configured providers, and that zero is a statement about block-shaped entries
+alone.
 
 `scripts/ccr-log.mjs` has no tests. It reads and prints, and a wrong reading is
 visible immediately, so the gap is deliberate rather than overlooked.

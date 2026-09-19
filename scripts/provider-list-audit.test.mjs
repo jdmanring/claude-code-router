@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { blockHeadings, headingFor, listNameAliases } from "./provider-list-audit.mjs";
+import { blockHeadings, headingFor, listNameAliases, orphanedBlocks } from "./provider-list-audit.mjs";
 
 const sample = [
   "SOME SECTION HEADING:",
@@ -85,4 +85,72 @@ test("a provider listed twice keeps each appearance separate", () => {
   for (const body of occurrences) {
     assert.equal(body.filter((line) => /usage tracking:/.test(line)).length, 1);
   }
+});
+
+test("a block left behind by a removed provider is reported", () => {
+  // The forward check passes in exactly this case, because every configured
+  // provider still has a block. Only the reverse direction sees it.
+  const headings = blockHeadings([
+    "Groq - still configured",
+    "    usage tracking: none found",
+    "",
+    "Venice - removed from the config",
+    "    usage tracking: none found",
+    ""
+  ].join("\n"));
+  assert.deepEqual(orphanedBlocks(headings, new Set(["groq"])), ["venice"]);
+});
+
+test("a block saying it is not configured is not an orphan", () => {
+  // The list carries providers it has deliberately never connected. They make
+  // no claim about the running config and must not fire this check.
+  const headings = blockHeadings([
+    "Deepseek - never connected",
+    "    usage tracking: not configured in CCR, so not probed",
+    ""
+  ].join("\n"));
+  assert.deepEqual(orphanedBlocks(headings, new Set()), []);
+});
+
+test("a hard-wrapped prose line is not a provider block", () => {
+  // The document's introduction is wrapped flush left and is followed by an
+  // indented legend, so only the blank line separates it from a real heading.
+  const headings = blockHeadings([
+    "A status here is the provider's own answer, not a",
+    "reading taken through CCR.",
+    "",
+    "  [ok]  answered 200",
+    ""
+  ].join("\n"));
+  assert.ok(!headings.has("reading taken through ccr."));
+});
+
+test("a heading whose body starts after a blank line is still a block", () => {
+  // The heading rule requires an indented body to separate a provider from the
+  // document's flush-left prose. If a blank line between the two dropped the
+  // block, the provider would read as having none, and the orphan check could
+  // not see it either. Both directions would go quiet at once.
+  const headings = blockHeadings([
+    "Groq - configured",
+    "",
+    "    usage tracking: none found",
+    ""
+  ].join("\n"));
+  assert.ok(headings.has("groq"), "a blank line under the heading must not drop the block");
+});
+
+test("a heading directly under the previous block's body is its own block", () => {
+  // Blocks are stacked with no blank line between them, so a heading is
+  // normally preceded by the indented last line of the block above. Treating
+  // that as a continuation merged the two and reported a duplicated field.
+  const headings = blockHeadings([
+    "Groq - first",
+    "    usage tracking: tracked",
+    "    some/model-id",
+    "Cerebras - second, no blank line above",
+    "    usage tracking: none found",
+    ""
+  ].join("\n"));
+  assert.ok(headings.has("cerebras"), "a stacked heading must not merge into the block above");
+  assert.equal(headings.get("groq").flat().filter((l) => /usage tracking:/.test(l)).length, 1);
 });

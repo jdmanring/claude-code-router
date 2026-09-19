@@ -48,9 +48,26 @@ export const listNameAliases = {
  */
 export function blockHeadings(text) {
   const headings = new Map();
+  const lines = text.split("\n");
   let current;
-  for (const line of text.split("\n")) {
-    const isHeading = line && !line.startsWith(" ") && !line.startsWith("-") && !/^[A-Z][A-Z ,()]+:$/.test(line);
+  for (const [index, line] of lines.entries()) {
+    // A provider block is a flush-left heading over an indented body. Prose
+    // paragraphs here are hard-wrapped flush left too, and the introduction is
+    // even followed by an indented legend, so the body alone does not separate
+    // them. What does is what sits above: a wrapped prose line always has
+    // another flush-left line directly over it, while a heading opens after a
+    // blank line, a dashed rule, a section label, or the indented body of the
+    // block above, since blocks here are stacked with no blank line between. Without this a wrapped
+    // prose line reads as a provider and absorbs the fields of the block below
+    // it; requiring the body on the very next line instead would silently drop
+    // any heading followed by a blank line, taking both directions of the
+    // audit quiet at once.
+    const next = lines.slice(index + 1).find((candidate) => candidate.trim() !== "");
+    const above = lines[index - 1];
+    const opensABlock = above === undefined || above.trim() === "" || above.startsWith(" ")
+      || /^-+$/.test(above.trim()) || above.trim().endsWith(":");
+    const isHeading = line && !line.startsWith(" ") && !line.startsWith("-") && !line.endsWith(":")
+      && opensABlock && next !== undefined && next.startsWith(" ");
     if (isHeading) {
       current = line.split(" - ")[0].split(" — ")[0].trim().toLowerCase();
       if (!headings.has(current)) headings.set(current, []);
@@ -68,6 +85,25 @@ export function headingFor(providerName, headings) {
   if (headings.has(name)) return name;
   const alias = listNameAliases[name];
   return alias && headings.has(alias) ? alias : undefined;
+}
+
+/**
+ * Blocks describing a provider the configuration no longer has.
+ *
+ * The forward check cannot see a REMOVED provider: its block stays behind and
+ * still reads as a live one. A block stating a tracking verdict is a claim
+ * about the running config, so it has to resolve to a configured provider. A
+ * block saying "not configured" claims nothing and is exempt, which is how the
+ * deliberate not-yet-connected entries stay quiet.
+ */
+export function orphanedBlocks(headings, described) {
+  const orphaned = [];
+  for (const [heading, occurrences] of headings) {
+    const trackingLines = occurrences.flat().filter((line) => /^\s*usage tracking:/i.test(line));
+    const claimsTheConfig = trackingLines.some((line) => !/not configured/i.test(line));
+    if (claimsTheConfig && !described.has(heading)) orphaned.push(heading);
+  }
+  return orphaned;
 }
 
 function main() {
@@ -96,13 +132,18 @@ function main() {
     }
   }
 
+  const described = new Set(providers.map((p) => headingFor(p.name, headings)).filter(Boolean));
+  const orphaned = orphanedBlocks(headings, described);
+
   for (const name of missing) console.log(`NO BLOCK   ${name}`);
+  for (const name of orphaned) console.log(`ORPHANED   ${name}`);
   for (const line of disagree) console.log(`DISAGREES  ${line}`);
   for (const line of duplicated) console.log(`DUPLICATED ${line}`);
   console.log(`\n${providers.length} enabled providers: ${missing.length} with no block, `
     + `${disagree.length} whose tracking claim disagrees with the config, `
-    + `${duplicated.length} with more than one tracking line`);
-  process.exitCode = missing.length + disagree.length + duplicated.length > 0 ? 1 : 0;
+    + `${duplicated.length} with more than one tracking line, `
+    + `${orphaned.length} block(s) describing a provider the config no longer has`);
+  process.exitCode = missing.length + disagree.length + duplicated.length + orphaned.length > 0 ? 1 : 0;
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
