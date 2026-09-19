@@ -259,26 +259,6 @@ export function codexCandidate(): LocalAgentProviderCandidate {
   return missingCandidate("codex", "codex-api", "Codex API", "openai_responses", catalog.models, catalog.modelDisplayNames);
 }
 
-// The access token stored here is a snapshot of the Codex login as it stood when
-// the provider was imported, and nothing re-reads auth.json afterwards, so a
-// token that expires later is kept and sent until the provider is imported
-// again. The gateway answers 401 and the provider reads as signed out while the
-// CLI beside it is working from a refreshed token.
-//
-// `refreshIfMissingAccessToken` already mints a current token from the refresh
-// token, but only fires when no access token is present. Where a refresh token
-// exists, leaving the access token out is therefore what keeps the credential
-// current. Where it does not, the snapshot is still the only thing to send.
-export function codexOauthCredential(auth: OAuthTokenSet): Record<string, unknown> {
-  return {
-    ...(auth.refreshToken ? {} : { accessToken: auth.accessToken }),
-    ...(auth.accountId ? { accountId: auth.accountId } : {}),
-    refreshIfMissingAccessToken: true,
-    refreshToken: auth.refreshToken,
-    required: true
-  };
-}
-
 export async function importCodexProvider(candidate: LocalAgentProviderCandidate, providerNames: string[]): Promise<LocalAgentProviderImportResult> {
   const auth = readCodexAuth();
   if (!auth?.refreshToken && !auth?.accessToken) {
@@ -295,7 +275,13 @@ export async function importCodexProvider(candidate: LocalAgentProviderCandidate
     ].map((plugin) => ({
       ...plugin,
       ...(auth.isFedrampAccount ? { auth: { headers: { "X-OpenAI-Fedramp": "true" } } } : {}),
-      codexOauth: codexOauthCredential(auth)
+      codexOauth: {
+        accessToken: auth.accessToken,
+        ...(auth.accountId ? { accountId: auth.accountId } : {}),
+        refreshIfMissingAccessToken: true,
+        refreshToken: auth.refreshToken,
+        required: true
+      }
     }))
   };
 }

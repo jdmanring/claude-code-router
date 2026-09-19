@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   attachCodexRateLimitResetCreditDetails,
   codexDefaultBaseUrl,
-  codexOauthCredential,
   codexModelCatalogFromPayloadForTest,
   codexProviderAccountConfig,
   codexRateLimitResetCreditDetails,
@@ -366,25 +365,4 @@ test("Codex model catalog parser ignores invalid context metadata", () => {
   });
 
   assert.equal(catalog.modelMetadata?.["invalid-context-model"], undefined);
-});
-
-test("Codex OAuth credential leaves refreshing to the gateway where it can refresh", () => {
-  const refreshable = codexOauthCredential({
-    accessToken: "snapshot-taken-at-import",
-    accountId: "account-id",
-    refreshToken: "refresh-token"
-  });
-  assert.equal(Object.hasOwn(refreshable, "accessToken"), false,
-    "a stored snapshot would be sent after it expires, and nothing re-reads auth.json");
-  assert.equal(refreshable.refreshToken, "refresh-token");
-  assert.equal(refreshable.refreshIfMissingAccessToken, true);
-  assert.equal(refreshable.accountId, "account-id");
-  assert.equal(refreshable.required, true);
-
-  // With no refresh token there is nothing to mint from, so the snapshot is
-  // still the only credential available and must be kept.
-  const snapshotOnly = codexOauthCredential({ accessToken: "only-token" });
-  assert.equal(snapshotOnly.accessToken, "only-token");
-  assert.equal(snapshotOnly.refreshToken, undefined);
-  assert.equal(Object.hasOwn(snapshotOnly, "accountId"), false);
 });
