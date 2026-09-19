@@ -201,3 +201,34 @@ export function clearTargetCooldown(target: string | undefined): void {
 export function resetTargetCooldownsForTest(): void {
   cooldowns.clear();
 }
+
+/**
+ * Which entry to attempt anyway when every entry is sidelined.
+ *
+ * A chain that sidelines all of its entries must still try one, or a request
+ * fails having tried nothing. Attempting whichever entry happens to sit last
+ * satisfies that and picks badly: measured 2026-09-19, all nine live entries of
+ * one chain were cooling and the tenth was an account out of credit, so every
+ * request walked nine skips into a guaranteed 403.
+ *
+ * The least-cooled target is the better bet by the store's own reasoning,
+ * because the window length already encodes how long each has been failing. It
+ * is the one closest to being retried on purpose.
+ *
+ * Returns the last index when any entry is live, so the existing guarantee is
+ * unchanged in the ordinary case and only the all-cooling case moves.
+ */
+export function lastResortIndex(targets: readonly (string | undefined)[]): number {
+  if (targets.length === 0) return -1;
+  let bestIndex = -1;
+  let bestRemaining = Number.POSITIVE_INFINITY;
+  for (const [index, target] of targets.entries()) {
+    const remaining = targetCooldownRemainingMs(target);
+    if (remaining <= 0) return targets.length - 1;
+    if (remaining < bestRemaining) {
+      bestRemaining = remaining;
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
+}

@@ -19,7 +19,7 @@ import { resolveGatewayPublicModelId } from "@ccr/core/gateway/features/model-di
 import { activeProviderCredentials, findProviderByPublicOrInternalName, findProviderCredentialBySlug, normalizedProviderCapabilities, parseProviderCredentialInternalName, providerCapabilityForClientProtocol, providerCapabilityInternalName, providerCapabilityNameMatches, providerCredentialInternalName, providerCredentialPriority, providerCredentialRuntimeId, providerCredentialSlug, providerProtocolForClientProtocol, sanitizeHeaderValue } from "@ccr/core/providers/runtime-topology";
 import { delay } from "@ccr/core/gateway/internal/clock";
 import { cooldownAfterStatus, retryDelayAfterNetworkError, retryDelayAfterStatus, shouldFallbackAfterStatus } from "@ccr/core/gateway/upstream/retry-policy";
-import { clearTargetCooldown, isAccountScopedRefusal, markTargetFailure, providerScopeOf, targetCooldownRemainingMs } from "@ccr/core/gateway/upstream/target-cooldown";
+import { clearTargetCooldown, isAccountScopedRefusal, lastResortIndex, markTargetFailure, providerScopeOf, targetCooldownRemainingMs } from "@ccr/core/gateway/upstream/target-cooldown";
 import { ccrRoutedModelHeader } from "@ccr/core/gateway/core-runtime/router-plugin-contract";
 import { claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta, UpstreamRequestError } from "@ccr/core/gateway/internal/shared";
 import type { ApiKeyLimitUsage, ProviderCredentialRoutingTarget, UpstreamAttempt, UpstreamFailedAttempt, UpstreamFetchResult } from "@ccr/core/gateway/internal/shared";
@@ -372,6 +372,10 @@ export async function fetchUpstreamWithFallback(input: {
     target: attempts[0]?.model ? { model: attempts[0].model } : undefined
   });
 
+  // Which entry is attempted even though it is cooling. Computed once, before
+  // the loop, because a cooldown lapsing mid-walk would otherwise move it.
+  const forcedIndex = lastResortIndex(attempts.map((attempt) => attempt.model));
+
   for (let index = 0; index < attempts.length; index += 1) {
     if (input.signal?.aborted) {
       throw new UpstreamRequestError(abortSignalMessage(input.signal), {
@@ -383,10 +387,11 @@ export async function fetchUpstreamWithFallback(input: {
     const plannedAttempt = attempts[index];
     // A target that just answered 429 or 402 answers the same way until its
     // window rolls over, so spending an attempt on it only burns the chain.
-    // The last entry is always attempted: a request must try something rather
-    // than fail having tried nothing.
+    // One entry is attempted regardless: a request must try something rather
+    // than fail having tried nothing. Where every entry is cooling that is the
+    // least-cooled one, not whichever sits last.
     const cooldownRemainingMs = targetCooldownRemainingMs(plannedAttempt.model);
-    if (cooldownRemainingMs > 0 && index < attempts.length - 1) {
+    if (cooldownRemainingMs > 0 && index !== forcedIndex) {
       const skippedAt = Date.now();
       input.trace?.capture({
         attempt: attemptNumber,

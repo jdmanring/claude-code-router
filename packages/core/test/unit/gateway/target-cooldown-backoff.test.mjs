@@ -12,6 +12,7 @@ import {
   markTargetCoolingDown,
   isAccountScopedRefusal,
   isRequestShapeRefusal,
+  lastResortIndex,
   markTargetFailure,
   providerScopeOf,
   resetTargetCooldownsForTest,
@@ -211,4 +212,28 @@ test("answering clears a size refusal, so a raised limit is picked up", () => {
   assert.ok(targetCooldownRemainingMs(target) > 0);
   clearTargetCooldown(target);
   assert.equal(targetCooldownRemainingMs(target), 0, "a success must return the target to the chain");
+});
+
+test("when every entry is cooling, the least-cooled one is the last resort", () => {
+  // Measured 2026-09-19: all nine live entries of one chain were cooling and
+  // the tenth was an account out of credit, so every request walked nine skips
+  // into a guaranteed 403. Attempting whichever entry sits last satisfies "try
+  // something" and picks badly.
+  const chain = ["p::x/a", "p::x/b", "p::x/c"];
+  markTargetFailure(chain[0], 600_000);
+  markTargetFailure(chain[1], 60_000);
+  markTargetFailure(chain[2], 900_000);
+  assert.equal(lastResortIndex(chain), 1, "the shortest remaining window is the better bet");
+});
+
+test("a live entry anywhere leaves the last index as the safety net", () => {
+  // The control. While anything can still be attempted normally the existing
+  // guarantee must not move, or this changes behaviour in the ordinary case.
+  const chain = ["p::y/a", "p::y/b", "p::y/c"];
+  markTargetFailure(chain[0], 600_000);
+  assert.equal(lastResortIndex(chain), chain.length - 1);
+});
+
+test("lastResortIndex on an empty chain is not an index", () => {
+  assert.equal(lastResortIndex([]), -1);
 });

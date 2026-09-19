@@ -835,6 +835,15 @@ chain exists so that nobody has to.
 The streak is in memory, so a restart re-learns it at a cost of one attempt
 per target. Persisting it is possible and has not been needed.
 
+**One entry is attempted even when every entry is cooling**, or a request fails
+having tried nothing. That entry used to be whichever sat last, which satisfies
+the rule and chooses badly: measured 2026-09-19, all nine live entries of
+`rule-1` were cooling and the tenth was an account out of credit, so every
+request walked nine skips into a guaranteed 403. It is now the least-cooled
+target, because the window length already encodes how long each has been
+failing. Where any entry is live the last index remains the safety net, so only
+the all-cooling case moved.
+
 **A size refusal is not a bet about time, so it does not escalate.** Every other
 refusal clears eventually: a 429 when the window rolls, a 403 when the account
 is topped up, a 500 when the provider recovers. A target that refuses because
