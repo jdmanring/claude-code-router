@@ -360,3 +360,32 @@ key entered by hand rather than anything OpenCode supplied. Signing OpenCode in
 would give `importLocalAgentProvider` something to read, and would not change
 the free-tier answer.
 
+### OpenCode signed in to Go, 2026-09-19: a defect the sign-in exposed
+
+After signing in, `opencode.db` holds one row: `credential`, `integration_id`
+`opencode-go`, label "OpenCode Go", `active = 1`, value a 90-character JSON
+object of the shape `{"type":…,"key":…}`. The `account`, `account_state` and
+`control_account` tables stay empty, so the Go sign-in is an integration
+credential rather than an account session.
+
+`getLocalAgentProviderCandidates` still offered only `codex-api` and
+`claude-code`. The cause: `openCodeAuthFiles()` returns exactly one path,
+`<dataRoot>/auth.json`, and OpenCode 2.x does not write it. Confirmed absent at
+all four plausible locations. So a signed-in OpenCode is invisible to CCR, and
+this is a defect in CCR rather than anything missing on the OpenCode side.
+
+Fixed by reading the `credential` table when the file scan finds nothing, and
+handing the stored value to the same `openCodeCredentialFromRecord` the file
+path uses, since the shapes match. Read-only, best effort, no throw: it runs
+while listing candidates. Four tests added to the existing OpenCode suite
+(16 pass). Staged upstream as
+`fix/opencode-credential-from-database`.
+
+Note it will not change the running install until the package is rebuilt and
+reinstalled, per the build-provenance section of the repository guide.
+
+The three negative tests passed vacuously on first run, because a candidate's
+id carries its protocol (`opencode-go-api-openai-chat-completions`) and the
+assertions matched on the bare provider id. They now filter on the provider
+prefix *and* on the source file, which is what makes the database the thing
+being tested.
