@@ -301,11 +301,25 @@ from this provider as a quota, read `getProviderAccountSnapshots`, which calls
 the usage endpoint and reports the real figure.
 
 Both providers store a **snapshot** of the token in `providerPlugins`, taken when
-the provider was imported, and neither re-reads the agent's credential file. The
-Codex entry carries `refreshIfMissingAccessToken`, which fires only when the
-token is absent, so an expired token is kept and used until the provider is
-imported again. Re-import through `importLocalAgentProvider` is the supported
-refresh; editing the stored credential by hand is not.
+the provider was imported, but only one of them is stuck with it. Claude Code,
+Grok and Kimi are handled by `local-agent-auth-provider-hook.ts`, which re-reads
+the agent's credential file on every request and falls back to the snapshot, so a
+rotation is picked up without a restart. Codex is not handled there at all: the
+vendored runtime consumes its `codexOauth` entry, and
+`refreshIfMissingAccessToken` fires only when the access token is absent, so an
+expired snapshot is kept and sent indefinitely. The symptom is a 401 from a
+provider whose CLI beside it is working from a token refreshed hours earlier.
+
+`codexOauthCredential` now omits the access token whenever a refresh token
+exists, which is what makes that refresh fire. Re-import through
+`importLocalAgentProvider` is the supported way to refresh an existing entry;
+editing the stored credential by hand is not, and the sandbox refuses it.
+
+`local-plugins/gateway-claude-code-oauth-identity.mjs` predates the core fix and
+does the same thing from the plugin host, which needs no rebuild. Both are
+idempotent and skip a request that already carries the block. DEFER(once the
+installed dist is rebuilt from this tree): drop the local plugin and let
+`withClaudeCodeIdentity` carry it alone.
 
 ## Usage tracking
 
