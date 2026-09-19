@@ -200,3 +200,53 @@ Parameter count is not capability, and "this model is larger" is a claim from
 priors rather than a reading. Where two candidates are both free and both
 answer, the tie is broken by a probe with one correct answer, and one probe is
 one reading.
+
+## Auriko and Requesty were classified wrong, and their own pricing pages say so
+
+Both were left carrying several models on the grounds that their allowance
+looked per model. Reading what each publishes:
+
+**Auriko** charges pay-as-you-go with zero markup, and its free plan is "$0 plus
+pay-as-you-go API costs". There are no free models: the free tier removes the
+platform fee, not the inference cost, which is why its catalogue of 197 models
+publishes no pricing field and a filter keyed on one reported nothing. The
+per-model limit seen earlier ("Rate limit exceeded for model 'glm-4.7-flash'")
+is a rate, and the allowance being spent is one account balance. That makes it
+a money pool carrying five models where it should carry one.
+
+**Requesty**'s free plan is "the full platform, on free models, access to all
+free models, 200 requests per day". The allowance is a count of requests held
+by the account, not a bucket per upstream. The per-upstream behaviour recorded
+earlier is real but is about which copy of a model is free, not about separate
+allowances: `google/gemma-4-31b-it` answers while `deepinfra/google/gemma-4-31B-it`
+returns a balance error. So it belongs with the request budgets, carrying one
+model rather than nine.
+
+Neither was settled by probing, and neither could have been: the catalogues
+carry no free marker and no usable price. The pricing page answered both in one
+fetch each.
+
+## Literouter, settled across four task shapes
+
+The single-question probe picked `mistral-large-3:free`, a second one picked
+`glm-5.2:free`, and a battery of four task shapes says both were wrong.
+
+| Model | instruction | reasoning | code | summarise | |
+| --- | --- | --- | --- | --- | --- |
+| `deepseek-v3.2:free` | pass | fail | pass | pass | 3 of 4 |
+| `glm-5.2:free` | fail | pass | fail | fail | 1 of 4 |
+| `mistral-large-3:free` | pass | fail | fail | not reached | 1 of 4 |
+
+`glm-5.2:free` returned one or two words on three of the four tasks against a
+300-token ceiling, which reads as reasoning tokens consuming the budget before
+any answer is produced. A single probe missed that because the one question it
+was asked happened to complete.
+
+## Mistral keeps its general model
+
+`codestral-latest` won a Python-semantics question and lost every task that
+required following an instruction, answering a request for a single number
+with "Alright, let's tackle this problem step by step" and exceeding a
+twenty-word limit. `mistral-medium-latest` took instruction-following and the
+length limit. Both stay on `mistral-medium-latest`, and the probe that said
+otherwise was a code question chosen to separate code models.
