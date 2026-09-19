@@ -430,6 +430,28 @@ always resolve references here, so confirm a negative by a second route.
 Degree in the god-node ranking conflates fan-in with fan-out, so take the
 caller set from the symbol index rather than reading the ranking as importance.
 
+## What actually runs is an installed build, not this tree
+
+`ccr` resolves to a global npm install
+(`~/.nvm/versions/node/*/lib/node_modules/@musistudio/claude-code-router`),
+built from a tarball at some past moment. A commit merged to `main` changes
+nothing about the running gateway until that package is rebuilt and installed,
+and both report the same `version`, so the version number cannot tell them
+apart.
+
+Deciding whether a fix is live has one reliable check and one trap. The trap is
+grepping the installed bundle for an identifier: the bundle is minified, so an
+internal name is renamed and reads as absent while the code is present
+(`targetCooldown` greps zero in a bundle that contains `target-cooling-down`).
+What survives minification is a string literal and a property name crossing an
+RPC boundary. The check that no bundler can defeat is the clock: compare the
+bundle's mtime against `git log -1 --format=%cd <commit>`, and anything
+committed later cannot be in it.
+
+This is also why `local-plugins/` matters more than it looks. A plugin is loaded
+by absolute path from the user's config, so it runs against the installed
+build immediately, while the equivalent core change waits for a reinstall.
+
 ## Test baseline
 
 `origin/main` does not pass its own core suite. Before attributing a core test failure to local work, reproduce it against pure upstream in a throwaway worktree (`git worktree add --detach <dir> origin/main`, symlink the root `node_modules`, then `node build/test.mjs core && node build/run-tests.mjs core`) and compare failure names. Attribute only the difference.
