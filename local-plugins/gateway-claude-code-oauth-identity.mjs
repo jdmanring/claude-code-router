@@ -26,31 +26,37 @@ export const manifest = {
 export const CLAUDE_CODE_IDENTITY =
   "You are Claude Code, Anthropic's official CLI for Claude.";
 
-const isIdentityBlock = (block) =>
-  typeof block === "string"
-    ? block.startsWith(CLAUDE_CODE_IDENTITY)
-    : Boolean(block) && typeof block === "object" && typeof block.text === "string"
-      && block.text.startsWith(CLAUDE_CODE_IDENTITY);
+// Anthropic accepts the identity only as an EXACT first system block. Measured
+// against the API with one token seconds apart: no system block, an unrelated
+// first block, the identity placed second, and the identity carrying trailing
+// text are all refused with the same empty 429; only an exact first block is
+// accepted, and further blocks after it are free.
+//
+// A prefix test would therefore pass over the one shape CCR actually produces:
+// adapting a request for a non-Anthropic protocol flattens the two blocks the
+// interactive CLI sends into a single string that begins with the identity and
+// continues into the rest of the prompt.
+const identityLeads = (system) => {
+  const first = Array.isArray(system) ? system[0] : system;
+  if (typeof first === "string") return first === CLAUDE_CODE_IDENTITY;
+  return Boolean(first) && typeof first === "object" && first.text === CLAUDE_CODE_IDENTITY;
+};
 
-// Only an Anthropic Messages body is touched, and only when it is not already
-// identified. A body that already leads with the block is returned unchanged,
-// so a real Claude Code session passing through is never modified.
 export function applyIdentity(body) {
   if (!body || typeof body !== "object" || !Array.isArray(body.messages)) {
     return { applied: false, body };
   }
-  const identity = { type: "text", text: CLAUDE_CODE_IDENTITY };
   const system = body.system;
-  if (system === undefined || system === null) {
+  if (identityLeads(system)) return { applied: false, body };
+  const identity = { type: "text", text: CLAUDE_CODE_IDENTITY };
+  if (system === undefined || system === null || system === "") {
     return { applied: true, body: { ...body, system: [identity] } };
   }
-  if (typeof system === "string") {
-    if (system.startsWith(CLAUDE_CODE_IDENTITY)) return { applied: false, body };
-    return { applied: true, body: { ...body, system: [identity, { type: "text", text: system }] } };
-  }
-  if (!Array.isArray(system)) return { applied: false, body };
-  if (system.length > 0 && isIdentityBlock(system[0])) return { applied: false, body };
-  return { applied: true, body: { ...body, system: [identity, ...system] } };
+  const rest = typeof system === "string"
+    ? [{ type: "text", text: system }]
+    : Array.isArray(system) ? system : undefined;
+  if (!rest) return { applied: false, body };
+  return { applied: true, body: { ...body, system: [identity, ...rest] } };
 }
 
 // The gate is the credential, not the host: a request authorised some other way

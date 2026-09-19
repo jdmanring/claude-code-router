@@ -27,18 +27,36 @@ test("prepends to an existing array without dropping anything", () => {
   assert.equal(applied, true);
   assert.equal(body.system.length, 3);
   assert.deepEqual(body.system.slice(1), original);
+  assert.equal(original.length, 2);
 });
 
-test("leaves a request that already identifies itself untouched", () => {
-  const already = { messages: msgs, system: [{ type: "text", text: `${CLAUDE_CODE_IDENTITY} Extra.` }] };
-  const { applied, body } = applyIdentity(already);
-  assert.equal(applied, false);
-  assert.equal(body, already);
+test("leads a block that only begins with the identity", () => {
+  // Adapting for a non-Anthropic protocol flattens the CLI's two blocks into
+  // one string, and the API refuses that, so it still has to be led.
+  const flattened = `${CLAUDE_CODE_IDENTITY}\nYou are an interactive agent that helps.`;
+  for (const system of [flattened, [{ type: "text", text: flattened }]]) {
+    const { applied, body } = applyIdentity({ messages: msgs, system });
+    assert.equal(applied, true);
+    assert.equal(firstText(body), CLAUDE_CODE_IDENTITY);
+    assert.equal(body.system.length, 2);
+  }
 });
 
-test("leaves a string system that already identifies itself untouched", () => {
-  const already = { messages: msgs, system: CLAUDE_CODE_IDENTITY };
-  assert.equal(applyIdentity(already).applied, false);
+test("leads a system whose identity is not first", () => {
+  const system = [{ type: "text", text: "other" }, { type: "text", text: CLAUDE_CODE_IDENTITY }];
+  assert.equal(applyIdentity({ messages: msgs, system }).applied, true);
+});
+
+test("leaves a request that already leads with the exact identity untouched", () => {
+  for (const system of [
+    [{ type: "text", text: CLAUDE_CODE_IDENTITY }],
+    [{ type: "text", text: CLAUDE_CODE_IDENTITY, cache_control: { type: "ephemeral" } }],
+    [{ type: "text", text: CLAUDE_CODE_IDENTITY }, { type: "text", text: "more" }],
+    [CLAUDE_CODE_IDENTITY],
+    CLAUDE_CODE_IDENTITY
+  ]) {
+    assert.equal(applyIdentity({ messages: msgs, system }).applied, false);
+  }
 });
 
 test("ignores a body that is not an Anthropic Messages body", () => {

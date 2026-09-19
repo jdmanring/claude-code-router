@@ -303,22 +303,11 @@ function claudeCodeOauthProviderPlugin() {
 async function withClaudeCodeHome(run) {
   const home = mkdtempSync(path.join(os.tmpdir(), "ccr-claude-code-hook-test-"));
   const previousHome = process.env.HOME;
-  const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
-  const previousSecureStorageDir = process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
   process.env.HOME = home;
-  // The credential scan reads the secure-storage config dir before any
-  // HOME-derived path. An inherited CLAUDE_CONFIG_DIR (a real profile dir in
-  // a router-launched session) would escape this temp home and let assertions
-  // read a live credential, and it also changes the derived keychain service
-  // name. Unset both so the scan stays inside the temp home.
-  delete process.env.CLAUDE_CONFIG_DIR;
-  delete process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
   try {
     await run(home);
   } finally {
     restoreEnv("HOME", previousHome);
-    restoreEnv("CLAUDE_CONFIG_DIR", previousConfigDir);
-    restoreEnv("CLAUDE_SECURESTORAGE_CONFIG_DIR", previousSecureStorageDir);
     rmSync(home, { force: true, recursive: true });
   }
 }
@@ -420,8 +409,27 @@ test("Claude Code identity block is added only where Anthropic requires it", () 
   assert.deepEqual(prepended.value.system.slice(1), existing);
   assert.equal(existing.length, 2, "the caller's system array is not mutated");
 
+  // The API accepts the identity only as an exact first block, so a block that
+  // merely begins with it still has to be led. Adapting a request for a
+  // non-Anthropic protocol produces exactly that shape, by flattening the
+  // interactive CLI's two blocks into one string.
+  const flattened = `${claudeCodeIdentitySystemPrompt}\nYou are an interactive agent that helps.`;
+  for (const system of [flattened, [{ text: flattened, type: "text" }]]) {
+    const led = withClaudeCodeIdentity({ messages, system });
+    assert.equal(led.changed, true, "a block that only starts with the identity is refused by the API");
+    assert.equal(first(led.value), claudeCodeIdentitySystemPrompt);
+    assert.equal(led.value.system.length, 2);
+  }
+
+  // The identity present but not first is refused too, so it has to be led.
+  const notFirst = [{ text: "other", type: "text" }, { text: claudeCodeIdentitySystemPrompt, type: "text" }];
+  assert.equal(withClaudeCodeIdentity({ messages, system: notFirst }).changed, true);
+
+  // Already exactly right, in either accepted shape, and left alone.
   for (const system of [
-    [{ text: `${claudeCodeIdentitySystemPrompt} Extra.`, type: "text" }],
+    [{ text: claudeCodeIdentitySystemPrompt, type: "text" }],
+    [{ cache_control: { type: "ephemeral" }, text: claudeCodeIdentitySystemPrompt, type: "text" }],
+    [{ text: claudeCodeIdentitySystemPrompt, type: "text" }, { text: "more", type: "text" }],
     [claudeCodeIdentitySystemPrompt],
     claudeCodeIdentitySystemPrompt
   ]) {
@@ -459,7 +467,7 @@ test("Claude Code auth hook identifies a request that does not identify itself",
         const identified = {
           max_tokens: 16,
           messages: [{ content: "hi", role: "user" }],
-          system: [{ text: `${claudeCodeIdentitySystemPrompt} More.`, type: "text" }]
+          system: [{ text: claudeCodeIdentitySystemPrompt, type: "text" }, { text: "More.", type: "text" }]
         };
         const untouched = await hook.authenticate({ upstreamRequest: { ...base, body: identified } });
         assert.equal(untouched.ok, true);
