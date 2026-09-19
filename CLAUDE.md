@@ -243,7 +243,8 @@ the live install, and each has its pure judgement pinned by tests run with
 | Which providers does CCR actually reach, and why not | `scripts/provider-sweep.mjs` | 5 |
 | Does any configured model of a provider answer | the same, with `--all-models` | |
 | Which configured model ids does the provider still publish | `scripts/model-catalog-audit.mjs` | 4 |
-| Has anything in the config moved since it was known good | `scripts/config-audit.mjs` | 6 |
+| Has anything in the config moved since it was known good | `scripts/config-audit.mjs` | 10 |
+| Does every fallback chain entry name a configured provider and model | the same, reported on every run | |
 | What did one request actually do | `scripts/ccr-log.mjs` | none |
 | Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 10 |
 
@@ -291,6 +292,14 @@ gates section, which is how Meta and Venice were recorded, so removing those
 two left nothing for it to find. The check reads 0 orphans against 54
 configured providers, and that zero is a statement about block-shaped entries
 alone.
+
+The config audit reports dangling chain entries whether or not anything
+drifted, and that is deliberate. Removing a provider is a change the baseline
+gets re-taken for, so the drift check goes quiet while the chain entries
+pointing at the removed provider stay behind and read as ordinary entries. The
+same holds for a model withdrawn from a provider's list. Measured 2026-09-19:
+with the config matching its baseline on all 429 values, two entries could
+never answer, `Meta/muse-spark-1.3-contributor` and `VSLLM/glm-5.2-free`.
 
 `scripts/ccr-log.mjs` has no tests. It reads and prints, and a wrong reading is
 visible immediately, so the gap is deliberate rather than overlooked.

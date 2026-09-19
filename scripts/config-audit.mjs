@@ -131,6 +131,41 @@ export function flatten(value, prefix, into) {
 
 // Importing this file must not read the config or exit the process: the test
 // imports it for snapshot and flatten, which are pure.
+/**
+ * Chain entries that can never answer, because the provider or the model they
+ * name is not in the configuration.
+ *
+ * Drift against a baseline cannot see this. Removing a provider is a
+ * deliberate change that the baseline is re-taken for, while the chain entries
+ * pointing at it stay behind and read as ordinary entries. The same is true of
+ * a model withdrawn from a provider's list. Both spend a chain position on a
+ * request that cannot succeed.
+ *
+ * An entry is `Provider name/model id`, and a provider name may itself contain
+ * a slash, so the provider is matched by longest configured prefix rather than
+ * by splitting on the first separator.
+ */
+export function danglingChainEntries(source) {
+  const models = new Map((source.Providers ?? [])
+    .filter((provider) => provider.enabled !== false)
+    .map((provider) => [provider.name, new Set(provider.models ?? [])]));
+  const names = [...models.keys()].sort((a, b) => b.length - a.length);
+  const dangling = [];
+  for (const profile of source.profile?.profiles ?? []) {
+    for (const rule of profile.routing?.rules ?? []) {
+      for (const entry of rule.fallback?.models ?? []) {
+        const text = String(entry);
+        const provider = names.find((name) => text.startsWith(`${name}/`));
+        if (!provider) dangling.push({ entry: text, reason: "no such provider", rule: rule.id });
+        else if (!models.get(provider).has(text.slice(provider.length + 1))) {
+          dangling.push({ entry: text, reason: "provider does not carry this model", rule: rule.id });
+        }
+      }
+    }
+  }
+  return dangling;
+}
+
 function main() {
   const config = loadConfig();
     const current = snapshot(config);
@@ -161,9 +196,16 @@ function main() {
     if (was !== is) drift.push({ is: is ?? "(removed)", key, was: was ?? "(added)" });
   }
 
+  // Reported whether or not anything drifted: a dangling entry is wrong on its
+  // own terms, and re-taking the baseline after a deliberate removal would
+  // otherwise bless it permanently.
+  const dangling = danglingChainEntries(config);
+  for (const entry of dangling) console.log(`DANGLING   ${entry.rule}: ${entry.entry} (${entry.reason})`);
+
   if (drift.length === 0) {
-    console.log(`Config matches the baseline (${now.size} values checked).`);
-    process.exit(0);
+    console.log(`Config matches the baseline (${now.size} values checked)`
+      + `, ${dangling.length} chain entry(ies) naming a provider or model that is not configured.`);
+    process.exit(dangling.length > 0 ? 1 : 0);
   }
 
   console.log(`${drift.length} value(s) drifted from the baseline:\n`);

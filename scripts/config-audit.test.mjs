@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { flatten, secretLength, snapshot } from "./config-audit.mjs";
+import { flatten, secretLength, snapshot, danglingChainEntries } from "./config-audit.mjs";
 
 const providerConfig = (overrides = {}) => ({
   Providers: [{
@@ -75,4 +75,41 @@ test("flatten reaches every leaf, so a nested change cannot hide", () => {
     "providers.Example.capabilities",
     "providers.Example.usageConnectors"
   ]) assert.ok(keys.includes(expected), `snapshot lost ${expected}`);
+});
+
+test("a chain entry naming a removed provider is reported", () => {
+  // Removing a provider is a deliberate change, so the baseline gets re-taken
+  // and the drift check goes quiet. The entries pointing at it stay behind.
+  const config = {
+    Providers: [{ models: ["m1"], name: "Groq" }],
+    profile: { profiles: [{ routing: { rules: [{ fallback: { models: ["Groq/m1", "Meta/m9"] }, id: "r1" }] } }] }
+  };
+  assert.deepEqual(danglingChainEntries(config), [{ entry: "Meta/m9", reason: "no such provider", rule: "r1" }]);
+});
+
+test("a chain entry naming a withdrawn model is reported", () => {
+  const config = {
+    Providers: [{ models: ["glm-4.7-flash-free"], name: "VSLLM" }],
+    profile: { profiles: [{ routing: { rules: [{ fallback: { models: ["VSLLM/glm-5.2-free"] }, id: "r1" }] } }] }
+  };
+  assert.deepEqual(danglingChainEntries(config),
+    [{ entry: "VSLLM/glm-5.2-free", reason: "provider does not carry this model", rule: "r1" }]);
+});
+
+test("a provider whose name contains a slash is matched whole", () => {
+  // Splitting on the first slash attributes "A/B/model" to a provider "A",
+  // which does not exist, and reports a working entry as dangling.
+  const config = {
+    Providers: [{ models: ["x"], name: "Z.ai (Global) - General/Endpoint" }],
+    profile: { profiles: [{ routing: { rules: [{ fallback: { models: ["Z.ai (Global) - General/Endpoint/x"] }, id: "r1" }] } }] }
+  };
+  assert.deepEqual(danglingChainEntries(config), []);
+});
+
+test("a disabled provider's chain entries are reported, not silently accepted", () => {
+  const config = {
+    Providers: [{ enabled: false, models: ["m1"], name: "Groq" }],
+    profile: { profiles: [{ routing: { rules: [{ fallback: { models: ["Groq/m1"] }, id: "r1" }] } }] }
+  };
+  assert.equal(danglingChainEntries(config).length, 1);
 });
