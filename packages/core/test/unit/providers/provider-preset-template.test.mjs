@@ -63,6 +63,32 @@ test("the Cloudflare preset declares what its endpoint needs", () => {
   assert.equal(findProviderPresetByBaseUrl(cloudflareResolved)?.id, "cloudflare-workers-ai");
 });
 
+test("a preset whose endpoint needs a variable it never declares is reported", () => {
+  // Without this, every assertion on presetTemplateIssues expects [], so the
+  // function could return [] unconditionally and the whole file would still
+  // pass. It is the only check standing between the preset corpus and a
+  // malformed entry, and the sweep below is what makes that corpus safe.
+  const issues = presetTemplateIssues({
+    endpoints: [{ baseUrl: "https://x/{accountId}/v1", type: "openai_chat_completions" }],
+    id: "probe",
+    name: "Probe",
+    variables: []
+  });
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /accountId/);
+});
+
+test("a preset declaring a variable no endpoint uses is reported", () => {
+  const issues = presetTemplateIssues({
+    endpoints: [{ baseUrl: "https://x/v1", type: "openai_chat_completions" }],
+    id: "probe",
+    name: "Probe",
+    variables: [{ key: "region", label: "Region" }]
+  });
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /region/);
+});
+
 test("no registered preset declares a variable it never uses, or uses one it never declares", () => {
   const issues = providerPresets.flatMap((preset) => presetTemplateIssues(preset));
   assert.deepEqual(issues, []);
