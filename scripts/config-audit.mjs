@@ -13,7 +13,7 @@
 // Exits non-zero when the config has drifted, so it can gate a restart or run
 // from a timer. Secrets are reduced to their length and never stored.
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 
@@ -182,6 +182,10 @@ function main() {
     // it does name every provider, base url, capability endpoint, usage
     // connector and plugin module path.
     writeFileSync(baselineFile, `${JSON.stringify(current, null, 2)}\n`, { mode: 0o600 });
+    // The mode argument applies on creation only, so a baseline written before
+    // this existed keeps whatever it had. Setting it every time is what makes
+    // the guarantee true rather than true for new installs.
+    chmodSync(baselineFile, 0o600);
     console.log(`Baseline saved to ${baselineFile}`);
     process.exit(0);
   }

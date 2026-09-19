@@ -147,10 +147,20 @@ with the server. Plugins are loaded by absolute module path from the `plugins`
 array in config, so `local-plugins/` adds no diff to any file upstream also
 ships and an ingest merge has nothing to reconcile.
 
-`local-plugins/process-supervisor.mjs` runs external processes for the server's
-lifetime: it starts each in order, waits on its `readyUrl` before the next, and
-unwinds in reverse on stop. Tests are not in the workspace harness; run them
-with `node --test local-plugins/process-supervisor.test.mjs`.
+Four plugins live here, and their tests are not in the workspace harness; run
+each with `node --test local-plugins/<file>.test.mjs`.
+
+- `process-supervisor.mjs` runs external processes for the server's lifetime:
+  it starts each in order, waits on its `readyUrl` before the next, and unwinds
+  in reverse on stop. It is what keeps the Copilot proxy alive.
+- `gateway-codex-reasoning-content.mjs` is loaded and registered, and logs a
+  signature line at load plus one line per change it makes.
+- `gateway-claude-code-oauth-identity.mjs` restores the Claude Code identity
+  block; see the local-agent OAuth section, and note it is currently enabled.
+- `gateway-restore-vendor-prefixed-model.mjs` is present and **not wired**. Its
+  own header records why: `transformRequest` is never invoked for a
+  chat-completions provider request, so it cannot reach the traffic it was
+  written for.
 
 Three things about the plugin API that are not discoverable from the types:
 
@@ -162,9 +172,12 @@ Three things about the plugin API that are not discoverable from the types:
   `loadConfiguredPlugin` returns before importing the module unless
   `apps || gateway || provider` is true, and each reads `!== false`. A
   lifecycle-only plugin must leave `surfaces` unset.
-- **`ccr start` discards the daemon's output** (`stdio: "ignore"` in the CLI), so
-  `[plugin:<id>] Disabled after startup failure` is never written anywhere. Use
-  `ccr serve --no-open` in the foreground to see plugin diagnostics.
+- **`ccr start` writes the daemon's output to `~/.claude-code-router/ccr-service.log`**,
+  so `[plugin:<id>] Disabled after startup failure` and every plugin
+  registration line land there. One previous run is kept as `ccr-service.log.1`.
+  Both are owner-only, because the daemon's first line names the management URL
+  and that URL carries the web auth token. Running `ccr serve --no-open` in the
+  foreground is no longer needed to see plugin diagnostics.
 
 ## Provider protocol selection
 
@@ -199,7 +212,7 @@ and therefore of cost:
 | `model:` | Slot resolves to | Chain behind it |
 |---|---|---|
 | `haiku` | Gemini flash-lite | the Haiku rule's chain, about forty free models |
-| `opus` | a local Ollama model | the Opus rule's chain |
+| `opus` | Ollama Cloud, remote and metered | the Opus rule's chain |
 | `fable` | the Claude plan model | metered against the plan |
 | `sonnet` | an OpenCode Zen free model | see below |
 
@@ -238,6 +251,9 @@ Four scripts and the plugin tests. Each answers one question, each runs against
 the live install, and each has its pure judgement pinned by tests run with
 `node --test <file>` rather than the workspace harness.
 
+Counts drift as tests are added, so re-measure rather than trusting the
+column: `for f in scripts/*.test.mjs local-plugins/*.test.mjs; do node --test "$f"; done`.
+
 | Question | Instrument | Tests |
 | --- | --- | --- |
 | Which providers does CCR actually reach, and why not | `scripts/provider-sweep.mjs` | 5 |
@@ -248,9 +264,10 @@ the live install, and each has its pure judgement pinned by tests run with
 | Does every fallback chain entry name a configured provider and model | the same, reported on every run | |
 | Which candidate model belongs in a slot | `scripts/model-probe.mjs` | 8 |
 | What did one request actually do | `scripts/ccr-log.mjs` | none |
-| Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 10 |
+| Does the provider list still describe the running config | `scripts/provider-list-audit.mjs` | 14 |
 
-Two properties worth keeping. **Importing any of them must not run the job**:
+Two properties worth keeping. **Importing any of them except `ccr-log.mjs`
+must not run the job**:
 the imperative part sits behind an `import.meta.url` entrypoint check, because
 importing the sweep for one helper used to sweep 56 providers. And
 **`model-catalog-audit` spends no quota** - one `GET /models` per provider, no
@@ -479,14 +496,19 @@ child starts, so editing the file changes nothing until the child restarts, and
 a `saveConfig` whose content is unchanged does not restart it: use
 `restartGateway`.
 
-The install was rebuilt from this tree on 2026-09-19, and the core fix was then
+The install was rebuilt from this tree on 2026-09-19, and the core fix was
 measured carrying the request on its own: with the plugin disabled and the
-child restarted, so that its registration line is absent from
-`ccr-service.log`, `Claude Code API` answered 200 twice. The plugin is left
-present but disabled rather than deleted, because the failure it covers returns
-the moment the global package is replaced by an upstream build, and that
-failure reads as an exhausted plan rather than as a missing patch. Re-enable it
-by id, not by module path: the entry carries no module field.
+child restarted, so that its registration line was absent from
+`ccr-service.log`, `Claude Code API` answered 200 twice.
+
+**The plugin is enabled again, so both paths are live.** Read the config rather
+than this sentence before reasoning about which one carries a request: the
+entry is `plugins[].id = "claude-code-oauth-identity"`, and
+`[claude-code-oauth-identity] provider hook registered` in `ccr-service.log`
+says it loaded. That matters because the reasoning below, about the injected
+block sitting ahead of the attribution block and defeating the strip, applies
+only while the plugin is loaded. Re-enable or disable it by id, not by module
+path: the entry carries no module field.
 
 ## Read the provider's own documentation before probing it
 
@@ -556,10 +578,11 @@ treating it as one cost this repository a working connector. The flag means the
 key itself imposes no cap, not that nothing was granted; a deployment can set
 it while still tracking an allowance. `newApiKeyUsageMeter` now discards only
 when `total_granted` is also zero, which is the case the flag was meant to
-cover. The installed build predates that: asked to resolve Tokenreply with
-`parser: "new-api-key-usage"` it returns no meters and the message "API key has
-no dedicated quota limit", so a connector wired against these providers writes
-its `mapping.meters` out rather than naming the preset parser. The mapping evaluates
+cover. That guard is in the installed build: it landed 2026-09-18 23:45 and
+the bundle was cut 2026-09-19 03:01, which the clock check settles. So naming
+`parser: "new-api-key-usage"` is enough and a connector does not need its
+`mapping.meters` written out by hand. Re-check with the clock rather than this
+sentence if the global package is replaced. The mapping evaluates
 arithmetic between two JSONPaths but not against a literal:
 `"$.data.balance.total - $.data.balance.remaining"` produced a used figure,
 while `"$.data.total_granted / 500000"` produced no meter at all.
