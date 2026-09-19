@@ -433,6 +433,20 @@ response, with `mapping.meters[]` naming JSONPath expressions for `limit`,
 `"$.limits.daily_tokens - $.usage.daily.tokens"` works). Thirteen providers
 report here; the recipe and the discovery sweep are in project memory.
 
+**Usage published in response headers cannot be read here, and that is
+settled.** Groq and the OpenAI convention report remaining capacity in
+`x-ratelimit-*` on every response rather than at an endpoint. The gateway child
+answers CCR with its own `x-gateway-*` set, so those never reach this process,
+and all three of the vendored runtime's extension points were tried and none is
+reached: `responseHooks` and `streamHooks` register and never fire, and
+`providerHooks.transformResponse` is only reached on the `openai-json` adapter
+path. One request settles it: with both local plugins loaded, the identity
+plugin logged `transformRequest reached this dispatch path` and the usage
+plugin logged nothing. So "no endpoint" against those providers is accurate and
+complete, and changing it needs a change in the vendored runtime. Read that
+runtime's own source from `node_modules/@the-next-ai/ai-gateway/dist/index.js.map`,
+which carries `sourcesContent`, rather than reasoning about the minified bundle.
+
 Do not wire a provider whose endpoint carries no consumption figures. A
 connector over key metadata or a raw request list reports "ok" while showing
 nothing, which reads as working tracking and is worse than none.

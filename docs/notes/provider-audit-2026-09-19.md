@@ -143,9 +143,9 @@ a column recorded on every request, always empty, describing the response the
 client received. And it is the precondition for header-based usage, which is
 the only usage signal a documented majority of these providers offer.
 
-DEFER(when the response-header capture is fixed): a `headers` mapping source
-for `http-json` connectors, which would bring Groq and every other
-OpenAI-convention provider into usage tracking without a new endpoint.
+RESOLVED 2026-09-19, negatively. See "Header-published usage: settled" below.
+No `headers` mapping source is worth building, because no extension point in
+this runtime is handed the upstream response on the paths this traffic takes.
 
 Status for Groq: `no endpoint`; usage exists but is unreachable by this
 codebase today.
@@ -389,3 +389,31 @@ id carries its protocol (`opencode-go-api-openai-chat-completions`) and the
 assertions matched on the bare provider id. They now filter on the provider
 prefix *and* on the source file, which is what makes the database the thing
 being tested.
+
+## Header-published usage: settled, negatively
+
+The runtime ships its own TypeScript in `dist/index.js.map` under
+`sourcesContent`, so the dispatch was read rather than inferred from the
+minified bundle.
+
+- `responseHooks` run only on the final **non-streaming** client response,
+  behind `hasResponseHook && upstreamPayloadForResponseHooks !== undefined` in
+  `src/gateway/handler.ts`. Registered here; never invoked.
+- `streamHooks` likewise never fired.
+- `providerHooks.transformResponse` **is** handed the real upstream `Response`
+  by `applyProviderResponsePlugins`, and `shouldRunProviderPlugin` imposes no
+  filter an unmatched hook would fail. But that function lives in
+  `src/gateway/openai-json.ts` and is reached only on that adapter path.
+
+The decisive reading, on one `Claude Code API` request with both local plugins
+loaded: `[claude-code-oauth-identity] transformRequest reached this dispatch
+path` appeared and the usage-header plugin logged nothing. Same request, same
+host, same provider. The request side of a provider hook runs; the response
+side is not reached.
+
+So the verdict belongs to the runtime rather than to the providers. Writing "no
+endpoint" against Groq and its peers is accurate and complete, and the only way
+to change it is a change in the vendored runtime.
+`local-plugins/gateway-upstream-usage-headers.mjs` is left present and disabled
+as the probe that re-tests this after a runtime upgrade: a line below its
+registration line means the path has opened.
