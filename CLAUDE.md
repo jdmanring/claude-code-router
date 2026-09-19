@@ -468,9 +468,10 @@ when `total_granted` is also zero, which is the case the flag was meant to
 cover. The installed build predates that: asked to resolve Tokenreply with
 `parser: "new-api-key-usage"` it returns no meters and the message "API key has
 no dedicated quota limit", so a connector wired against these providers writes
-its `mapping.meters` out rather than naming the preset parser. The mapping also
-does not evaluate arithmetic against a literal, so
-`"$.data.total_granted / 500000"` yields nothing while the bare path works.
+its `mapping.meters` out rather than naming the preset parser. The mapping evaluates
+arithmetic between two JSONPaths but not against a literal:
+`"$.data.balance.total - $.data.balance.remaining"` produced a used figure,
+while `"$.data.total_granted / 500000"` produced no meter at all.
 `testProviderAccountConnector` answers both questions before anything is
 saved.
 

@@ -457,3 +457,35 @@ answered 404, four 403, two 405, one HTML, one 401. All four new-api providers
 here (Tokenrouter, VSLLM, Tokenreply, AIHubMix) are already tracked. So there
 is no second wave of relay endpoints to find by that route, and what remains is
 per-provider documentation.
+
+## Corrections from the account actions of 2026-09-19
+
+**Orcarouter is open, and it cost nothing.** After linking an established
+GitHub account, all four configured free models answer with real output tokens
+(`orcarouter/free`, `deepseek/deepseek-v4-flash-free`, `tencent/hy3-free`,
+`z-ai/glm-5.3-flash-free`). The deposit their error offered was always the
+alternative to the link, never the requirement.
+
+**v0 was reported wrongly and the account proves it.** `/v1/user/billing`
+returns plan `v0-level0` with cycle credit largely unspent remaining this cycle, and
+`/v1/rate-limits` returns a limit of 10 with a daily 7. So the free access is
+real and the earlier "requires a Premium or Team plan" verdict, taken from a
+search summary rather than the account, was wrong. The 404 is not a plan gate
+either: `api.v0.dev` has no `/v1/chat/completions` on any model id, while
+`/v1/chats` and `/v1/deployments` answer, so it is a chat-session API and
+unroutable by CCR whatever the plan. Its credit is now tracked.
+
+**Meta: an inference withdrawn.** Writing that its message "implies no charge"
+was not something any source said. What is established is the message itself,
+`billing_not_configured` asking for a payment method, and that it is account
+level rather than per model. No pricing page for `api.meta.ai` was found, and
+the model is named `-contributor`, which suggests a programme rather than a
+free-forever tier. Left as not established, for James to read their billing
+page before adding a card.
+
+**Connector mapping arithmetic, precisely.** Between two JSONPaths it works:
+`"$.data.balance.total - $.data.balance.remaining"` produced v0's used figure.
+Against a literal it does not: `"$.data.total_granted / 500000"` produced no
+meter. The earlier note said only the second half.
+
+Tracked providers: 13 at the start of this session, 22 now.
