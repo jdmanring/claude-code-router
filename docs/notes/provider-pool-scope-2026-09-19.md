@@ -250,3 +250,37 @@ with "Alright, let's tackle this problem step by step" and exceeding a
 twenty-word limit. `mistral-medium-latest` took instruction-following and the
 length limit. Both stay on `mistral-medium-latest`, and the probe that said
 otherwise was a code question chosen to separate code models.
+
+## Applied: the final picks, and two faults in how this was recorded
+
+The configuration carries 148 models across 54 providers. Huggingface holds
+`zai-org/GLM-5.3-Flash:zai-org`, Literouter `deepseek-v3.2:free`, Requesty
+`nvidia/nemotron-3-super-120b-a12b`, Auriko `glm-4.7-flash`, and both Mistral
+providers keep `mistral-medium-latest`. Verified against stored config: zero
+chain entries naming a provider or model that is not configured.
+
+**The snapshots taken before each edit were not snapshots.** The configuration
+database runs in WAL mode with a write-ahead log several megabytes long, and
+`cp config.sqlite` copies only the main file, so each "backup" held whatever
+had last been checkpointed rather than the state at the moment of the copy.
+Both read 216 models while the live database read 148. Use `VACUUM INTO`,
+which serialises the log into the copy, and verify the copy by reading a count
+out of it rather than by its existence.
+
+**Editing the list to mirror the configuration destroys what the list is
+for.** The bulk edit that followed the first consolidation removed 44 lines,
+nine of which carried a measured status, and the next one would have removed
+thirteen more from Requesty alone, including the three `[gate] billed pool`
+readings that record which upstream prefix is charged and three `[gone]`
+readings for withdrawn ids. Those cost requests to learn; the configuration
+they were being reconciled against costs nothing to re-read. The document
+already had a marker for the distinction and had never defined it, so the
+asterisk now means "configured in CCR right now" and is written into the
+legend, and an unstarred line stays because of what it records.
+
+One finding is left open rather than scripted over. Forty-three configured
+model ids have no matching line in their provider's block, because the
+document and the configuration spell ids differently: the block writes
+`Groq/qwen-qwen3.8-27b` where the configuration holds `qwen/qwen3.8-27b`.
+Inserting lines for them would duplicate models already present under another
+spelling, so the mismatch needs a person, not a pass.
