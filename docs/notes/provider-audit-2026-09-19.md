@@ -603,3 +603,78 @@ All five publish documentation and none publishes a consumption endpoint.
   showing nothing.
 
 Status for all five: `as documented`, `no endpoint`.
+
+### NVIDIA - the credits model this list assumed no longer exists
+
+Documentation and their developer forum: the API catalogue on
+`build.nvidia.com` used to grant 1,000 credits on signup and up to 5,000 with a
+business email. **That credits system was withdrawn.** It is now a trial
+experience whose rate varies per model and with the number of concurrent users,
+with no credit balance at all. So there is nothing to meter, and the limit is
+not a number anyone can read.
+
+Status: `no endpoint`, and the free-tier description to correct is the credit
+count rather than the access.
+
+### Google Gemini - another member of the header class
+
+Documentation: `ai.google.dev/gemini-api/docs/rate-limits`. Two things matter
+here. Usage is published in **response headers**,
+`x-ratelimit-remaining-requests` and `x-ratelimit-reset-requests`, which is
+precisely the class settled above as unreachable from this codebase. And the
+limits are **per Google Cloud project, not per API key**, resetting at midnight
+Pacific, so a second key in the same project shares the same allowance rather
+than doubling it. Free tier: Flash 10 a minute and 250 a day, Flash-Lite 15 a
+minute and 1,000 a day.
+
+Status: `no endpoint` reachable; the figures exist but only in headers.
+
+### Mistral and Mistral Vibe - an Enterprise credential, already recorded
+
+Both are configured against `https://api.mistral.ai/v1`. Usage needs an
+Enterprise Admin API key created in the Mistral backoffice, which is not
+available on a normal plan; this is already recorded in project memory along
+with the Codestral host and the separate Vibe pool. Nothing has changed.
+
+Status: `needs account action`, unavailable on this plan.
+
+### Helixmind - confirmed again, and still not worth wiring
+
+`/key` answers with key metadata: id, name, prefix, and the plan's
+`max_input_tokens` of 10,000, which is a per-request ceiling rather than an
+allowance. `/usage` returns individual request records. Ten paths were probed
+and `/key` is the only one that answers. A connector over either would report
+"ok" while showing no consumption.
+
+Status: `no endpoint` carrying consumption.
+
+### The eight small relays - documented where documentation exists, probed where it does not
+
+EvolveX, Literouter, Pooled, Mixlayer, GonkaBroker, Agnes (Free and Paid),
+Pollinations and Intern AI were each asked for `/key`, `/me`, `/user`,
+`/credits`, `/balance`, `/usage`, `/limits`, `/quota`, `/subscription` and
+`/analytics` under their configured base url, with their own key. **None
+answered on any path.** None publishes an `llms.txt` documentation index
+either.
+
+Two corrections from their public material:
+
+- **Literouter**: the Basic plan is free with no time limit and no card, and
+  free models are capped at 100 requests an hour, roughly 2,400 a day. Their
+  documentation page advertises "usage analytics" but exposes no endpoint for
+  it.
+- **EvolveX**: their site advertises "a single, keyless endpoint". That is
+  marketing: `POST /v1/chat/completions` without an Authorization header
+  answers **401**. A key is required and one is configured here.
+
+Status for all eight: `no endpoint`.
+
+### GitHub Copilot - not a remote provider at all
+
+Configured against `http://127.0.0.1:9090/v1`, which is the local
+`copilot-proxy` this repository supervises, not a GitHub host. Any usage figure
+would have to come from GitHub's own entitlement rather than from the proxy,
+and the proxy publishes none. Project memory already records why this provider
+goes down and where its fix belongs.
+
+Status: `no endpoint`; out of scope for provider usage tracking.
